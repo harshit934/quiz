@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Working Quiz App</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Arial}
+body{min-height:100vh;display:flex;justify-content:center;align-items:center;background:#111;color:#fff}
+.card{width:700px;max-width:95%;padding:25px;background:#1c1c1c;border-radius:15px;box-shadow:0 0 20px #00f0ff;text-align:center}
+button{padding:8px 14px;margin:6px;border:none;border-radius:6px;cursor:pointer;background:#00f0ff;color:#000;font-weight:bold}
+button:hover{opacity:0.8}
+.answers button{display:block;width:100%;margin:8px 0;background:#222;color:#00f0ff;border:1px solid #00f0ff}
+.correct{background:#00ff88!important;color:#000}
+.wrong{background:#ff4444!important;color:#000}
+#nextBtn,#skipBtn{display:none}
+.progress{height:8px;background:#333;border-radius:10px;margin:10px 0;overflow:hidden}
+.progress-bar{height:100%;width:0%;background:#00f0ff;transition:0.3s}
+canvas{margin-top:20px}
+</style>
+</head>
+<body>
+
+<div class="card">
+
+<div id="levelBox">
+<h2>Select Difficulty</h2>
+<button onclick="startQuiz('easy')">Easy</button>
+<button onclick="startQuiz('medium')">Medium</button>
+<button onclick="startQuiz('hard')">Hard</button>
+</div>
+
+<div id="quizBox" style="display:none">
+<div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+<h3 id="question"></h3>
+<div id="answers" class="answers"></div>
+<button id="skipBtn">Skip</button>
+<button id="nextBtn">Next</button>
+<h3 id="result"></h3>
+<canvas id="chart" style="display:none"></canvas>
+</div>
+
+</div>
+
+<script>
+// ================= QUESTION BANK (15 EACH) =================
+const bank={
+ easy:[
+  {q:"Capital of France?",a:["Paris","Rome","Berlin","Madrid"],c:0},
+  {q:"5 + 5 = ?",a:["10","8","9","11"],c:0},
+  {q:"Sky color?",a:["Blue","Green","Red","Yellow"],c:0},
+  {q:"2 x 3 = ?",a:["6","5","4","7"],c:0},
+  {q:"Largest planet?",a:["Jupiter","Earth","Mars","Saturn"],c:0},
+  {q:"Water freezes at?",a:["0°C","5°C","10°C","-5°C"],c:0},
+  {q:"Opposite of hot?",a:["Cold","Warm","Cool","Heat"],c:0},
+  {q:"7 days make a?",a:["Week","Month","Year","Hour"],c:0},
+  {q:"Animal that barks?",a:["Dog","Cat","Cow","Goat"],c:0},
+  {q:"1 dozen equals?",a:["12","10","6","8"],c:0},
+  {q:"Sun rises in?",a:["East","West","North","South"],c:0},
+  {q:"Square sides?",a:["4","3","5","6"],c:0},
+  {q:"10 - 4 = ?",a:["6","5","7","8"],c:0},
+  {q:"Which is fruit?",a:["Apple","Carrot","Onion","Potato"],c:0},
+  {q:"Hours in day?",a:["24","12","48","36"],c:0}
+ ],
+ medium:[
+  {q:"Who discovered gravity?",a:["Newton","Einstein","Tesla","Galileo"],c:0},
+  {q:"Largest ocean?",a:["Pacific","Atlantic","Indian","Arctic"],c:0},
+  {q:"Square root of 144?",a:["12","14","10","16"],c:0},
+  {q:"Gold symbol?",a:["Au","Ag","Gd","Go"],c:0},
+  {q:"Who wrote Hamlet?",a:["Shakespeare","Dickens","Austen","Homer"],c:0},
+  {q:"Hardest natural substance?",a:["Diamond","Gold","Iron","Silver"],c:0},
+  {q:"H2O is?",a:["Water","Oxygen","Hydrogen","Salt"],c:0},
+  {q:"Largest desert?",a:["Sahara","Gobi","Kalahari","Arctic"],c:0},
+  {q:"Human bones?",a:["206","210","201","190"],c:0},
+  {q:"Mona Lisa painter?",a:["Da Vinci","Van Gogh","Picasso","Michelangelo"],c:0},
+  {q:"Smallest prime?",a:["2","1","3","5"],c:0},
+  {q:"First man on moon?",a:["Neil Armstrong","Buzz Aldrin","Yuri","John"],c:0},
+  {q:"WWII ended?",a:["1945","1939","1918","1950"],c:0},
+  {q:"Heart pumps?",a:["Blood","Water","Air","Oxygen"],c:0},
+  {q:"Binary of 2?",a:["10","11","01","100"],c:0}
+ ],
+ hard:[
+  {q:"E=mc² by?",a:["Einstein","Newton","Bohr","Tesla"],c:0},
+  {q:"Derivative of x²?",a:["2x","x","x²","2"],c:0},
+  {q:"Longest river?",a:["Nile","Amazon","Yangtze","Mississippi"],c:0},
+  {q:"CPU stands for?",a:["Central Processing Unit","Control Unit","Computer Unit","Power Unit"],c:0},
+  {q:"Pi approx?",a:["3.1416","3.1214","3.1514","3.4116"],c:0},
+  {q:"First programmer?",a:["Ada Lovelace","Turing","Jobs","Gates"],c:0},
+  {q:"Atomic number of Carbon?",a:["6","8","12","4"],c:0},
+  {q:"Binary search complexity?",a:["O(log n)","O(n)","O(n²)","O(1)"],c:0},
+  {q:"Boiling point water?",a:["100°C","90°C","110°C","120°C"],c:0},
+  {q:"Binary of 10?",a:["1010","1001","1100","1110"],c:0},
+  {q:"Neutral pH?",a:["7","5","9","1"],c:0},
+  {q:"Planet with most moons?",a:["Saturn","Earth","Mars","Venus"],c:0},
+  {q:"HTML used for?",a:["Structure","Styling","Database","Server"],c:0},
+  {q:"Speed of light?",a:["300,000 km/s","150,000","1,000","3,000"],c:0},
+  {q:"Heaviest natural element?",a:["Uranium","Gold","Iron","Silver"],c:0}
+ ]
+}
+
+let questions=[],index=0,score=0,skipped=0,chartInstance=null
+
+const levelBox=document.getElementById('levelBox')
+const quizBox=document.getElementById('quizBox')
+const questionEl=document.getElementById('question')
+const answersEl=document.getElementById('answers')
+const nextBtn=document.getElementById('nextBtn')
+const skipBtn=document.getElementById('skipBtn')
+const resultEl=document.getElementById('result')
+const chartCanvas=document.getElementById('chart')
+const progressBar=document.getElementById('progressBar')
+
+function startQuiz(level){
+ questions=bank[level]
+ levelBox.style.display='none'
+ quizBox.style.display='block'
+ index=0;score=0;skipped=0
+ showQuestion()
+}
+
+function showQuestion(){
+ answersEl.innerHTML=''
+ nextBtn.style.display='none'
+ skipBtn.style.display='inline-block'
+ const current=questions[index]
+ questionEl.innerText=`Question ${index+1} of ${questions.length}: ${current.q}`
+ progressBar.style.width=(index/questions.length)*100+'%'
+ current.a.forEach((text,i)=>{
+  const btn=document.createElement('button')
+  btn.innerText=text
+  btn.onclick=()=>selectAnswer(i,current.c,btn)
+  answersEl.appendChild(btn)
+ })
+}
+
+function selectAnswer(selected,correct,btn){
+ document.querySelectorAll('.answers button').forEach(b=>b.disabled=true)
+ skipBtn.style.display='none'
+ if(selected===correct){btn.classList.add('correct');score++}
+ else{btn.classList.add('wrong')}
+ nextBtn.style.display='inline-block'
+}
+
+skipBtn.onclick=function(){skipped++;nextQuestion()}
+nextBtn.onclick=function(){nextQuestion()}
+
+function nextQuestion(){
+ index++
+ if(index<questions.length){showQuestion()}
+ else{showResult()}
+}
+
+function showResult(){
+ questionEl.innerText='Quiz Completed!'
+ answersEl.innerHTML=''
+ skipBtn.style.display='none'
+ nextBtn.style.display='none'
+ progressBar.style.width='100%'
+ resultEl.innerText=`Score: ${score}/${questions.length} | Skipped: ${skipped}`
+ chartCanvas.style.display='block'
+ if(chartInstance) chartInstance.destroy()
+ chartInstance=new Chart(chartCanvas,{type:'doughnut',data:{labels:['Correct','Wrong','Skipped'],datasets:[{data:[score,questions.length-score-skipped,skipped],backgroundColor:['#00ff88','#ff4444','#ffaa00']}]} })
+}
+</script>
+
+</body>
+</html>
