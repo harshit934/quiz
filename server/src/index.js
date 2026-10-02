@@ -17,7 +17,6 @@ async function start() {
     try {
       await mongoose.connect(process.env.MONGODB_URI)
       console.info('Connected to MongoDB.')
-      await seedStarterContent()
     } catch (error) {
       console.error('MongoDB connection failed:', error.message)
     }
@@ -25,7 +24,18 @@ async function start() {
     console.warn('MONGODB_URI is not configured. API data routes require a database connection.')
   }
 
-  app.listen(port, () => console.info(`Quiz API listening on http://localhost:${port}`))
+  const server = app.listen(port, '0.0.0.0', () => console.info(`Quiz API listening on port ${port}`))
+
+  if (mongoose.connection.readyState === 1) {
+    try {
+      await seedStarterContent()
+      console.info('Starter content seeding complete.')
+    } catch (error) {
+      console.error('MongoDB seeding failed:', error.message)
+    }
+  }
+
+  return server
 }
 
 start()
