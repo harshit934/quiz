@@ -2,16 +2,7 @@ import User from './models/User.js'
 import Category from './models/Category.js'
 import Quiz from './models/Quiz.js'
 import Question from './models/Question.js'
-
-const categories = [
-  { name: 'JavaScript', slug: 'javascript', description: 'Language fundamentals and modern patterns.', icon: 'code-2', color: '#f1c75b' },
-  { name: 'React', slug: 'react', description: 'Components, state, and the React ecosystem.', icon: 'atom', color: '#56cfe1' },
-  { name: 'HTML', slug: 'html', description: 'The structure and semantics of the web.', icon: 'panels-top-left', color: '#ff835c' },
-  { name: 'CSS', slug: 'css', description: 'Layouts, selectors, and visual foundations.', icon: 'paintbrush', color: '#8585ff' },
-  { name: 'Python', slug: 'python', description: 'Readable syntax and practical programming.', icon: 'terminal', color: '#75c7a4' },
-  { name: 'Data Science', slug: 'data-science', description: 'Statistics, analysis, and machine learning.', icon: 'chart-no-axes-combined', color: '#49c7ba' },
-  { name: 'General Knowledge', slug: 'general-knowledge', description: 'A broad mix of everyday knowledge and ideas.', icon: 'globe-2', color: '#b29bff' },
-]
+import { flattenSubjectCategories, flattenSubjectQuizzes } from '../../shared/subjectCatalog.js'
 
 const legacyBanks = {
   Easy: [
@@ -95,26 +86,35 @@ const starterQuizzes = [
 ]
 
 export async function seedStarterContent() {
-  await Promise.all(categories.map(category => Category.updateOne(
+  const categoryData = flattenSubjectCategories()
+  await Promise.all(categoryData.map(({ parentSlug, rootSlug, legacy, ...category }) => Category.updateOne(
     { slug: category.slug },
-    { $setOnInsert: category },
+    { $set: { parentSlug, rootSlug }, $setOnInsert: category },
     { upsert: true },
   )))
 
-  if (await Quiz.countDocuments() === 0) {
-    const categoryBySlug = new Map((await Category.find()).map(category => [category.slug, category]))
-    const quizData = [
-      ...Object.entries(legacyBanks).map(([difficulty, questions]) => ({
-        title: `${difficulty} general knowledge`,
-        description: `The original ${difficulty.toLowerCase()} question set, preserved from your quiz app.`,
-        category: 'general-knowledge', difficulty, timeLimit: 10, featured: difficulty === 'Easy',
-        questions: questions.map(([text, options]) => [text, options, 0, 'Review the options and use this round to sharpen your general knowledge.']),
-      })),
-      ...starterQuizzes,
-    ]
-    for (const item of quizData) {
-      const category = categoryBySlug.get(item.category)
-      const quiz = await Quiz.create({
+  const categoryBySlug = new Map((await Category.find().lean()).map(category => [category.slug, category]))
+  const quizData = [
+    ...Object.entries(legacyBanks).map(([difficulty, questions]) => ({
+      title: `${difficulty} general knowledge`,
+      description: `The original ${difficulty.toLowerCase()} question set, preserved from your quiz app.`,
+      category: 'general-knowledge', difficulty, timeLimit: 10, featured: difficulty === 'Easy',
+      questions: questions.map(([text, options]) => ({ text, options, correctAnswer: 0, explanation: 'Review the options and use this round to sharpen your general knowledge.' })),
+    })),
+    ...starterQuizzes.map(item => ({
+      ...item,
+      questions: item.questions.map(([text, options, correctAnswer, explanation]) => ({ text, options, correctAnswer, explanation })),
+    })),
+    ...flattenSubjectQuizzes(),
+  ]
+
+  for (const item of quizData) {
+    const category = categoryBySlug.get(item.category)
+    if (!category) throw new Error(`Seed category not found: ${item.category}`)
+
+    let quiz = await Quiz.findOne({ title: item.title, category: category._id })
+    if (!quiz) {
+      quiz = await Quiz.create({
         title: item.title,
         description: item.description,
         category: category._id,
@@ -124,10 +124,14 @@ export async function seedStarterContent() {
         totalQuestions: item.questions.length,
         questions: [],
       })
-      const questions = await Question.insertMany(item.questions.map(([text, options, correctAnswer, explanation], position) => ({
-        quiz: quiz._id, text, options, correctAnswer, explanation, position,
+    }
+
+    if (!quiz.questions.length) {
+      const questions = await Question.insertMany(item.questions.map((question, position) => ({
+        ...question, quiz: quiz._id, position,
       })))
       quiz.questions = questions.map(question => question._id)
+      quiz.totalQuestions = questions.length
       await quiz.save()
     }
   }

@@ -6,6 +6,8 @@ const categorySchema = new mongoose.Schema({
   description: { type: String, default: '' },
   icon: { type: String, default: 'layers' },
   color: { type: String, default: '#8b7bff' },
+  parentSlug: { type: String, default: null, index: true },
+  rootSlug: { type: String, default: null, index: true },
 }, { timestamps: true })
 
 export default mongoose.model('Category', categorySchema)

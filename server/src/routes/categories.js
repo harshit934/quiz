@@ -14,12 +14,21 @@ const categorySchema = z.object({
 })
 
 router.get('/', asyncHandler(async (req, res) => {
-  const categories = await Category.find().sort({ name: 1 }).lean()
+  const categories = await Category.find().sort({ rootSlug: 1, parentSlug: 1, name: 1 }).lean()
   const counts = await Quiz.aggregate([
     { $group: { _id: '$category', count: { $sum: 1 } } },
   ])
   const countById = new Map(counts.map(item => [String(item._id), item.count]))
-  res.json(categories.map(category => ({ ...category, quizCount: countById.get(String(category._id)) || 0 })))
+  const countBySlug = new Map(categories.map(category => [category.slug, countById.get(String(category._id)) || 0]))
+  res.json(categories.map(category => {
+    const descendants = category.slug === category.rootSlug
+      ? categories.filter(item => item.rootSlug === category.slug)
+      : [category, ...categories.filter(item => item.parentSlug === category.slug)]
+    return {
+      ...category,
+      quizCount: descendants.reduce((total, item) => total + (countBySlug.get(item.slug) || 0), 0),
+    }
+  }))
 }))
 
 router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {

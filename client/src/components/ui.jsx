@@ -22,9 +22,9 @@ const icons = {
   trophy: Trophy,
 }
 
-export function CategoryIcon({ name, size = 18, className = '' }) {
+export function CategoryIcon({ name, size = 18, className = '', style }) {
   const Icon = icons[name] || CircleHelp
-  return <Icon aria-hidden="true" className={className} size={size} strokeWidth={1.8} />
+  return <Icon aria-hidden="true" className={className} size={size} strokeWidth={1.8} style={style} />
 }
 
 export function Badge({ children, tone = 'neutral' }) {

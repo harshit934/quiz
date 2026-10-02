@@ -1,4 +1,6 @@
-export const demoCategories = [
+import { flattenSubjectCategories, flattenSubjectQuizzes } from '../../../shared/subjectCatalog.js'
+
+const legacyDemoCategories = [
   { _id: 'cat-js', name: 'JavaScript', slug: 'javascript', icon: 'code-2', color: '#f1c75b', quizCount: 1 },
   { _id: 'cat-react', name: 'React', slug: 'react', icon: 'atom', color: '#56cfe1', quizCount: 1 },
   { _id: 'cat-html', name: 'HTML', slug: 'html', icon: 'panels-top-left', color: '#ff835c', quizCount: 1 },
@@ -8,12 +10,30 @@ export const demoCategories = [
   { _id: 'cat-general', name: 'General Knowledge', slug: 'general-knowledge', icon: 'globe-2', color: '#b29bff', quizCount: 3 },
 ]
 
+const legacyCategoryBySlug = new Map(legacyDemoCategories.map(category => [category.slug, category]))
+const subjectCategories = flattenSubjectCategories()
+const subjectQuizzes = flattenSubjectQuizzes()
+const subjectQuizCounts = subjectQuizzes.reduce((counts, quiz) => ({ ...counts, [quiz.category]: (counts[quiz.category] || 0) + 1 }), {})
+const quizCountFor = slug => (subjectQuizCounts[slug] || 0) + (legacyCategoryBySlug.get(slug)?.quizCount || 0)
+
+export const demoCategories = subjectCategories.map(category => ({
+  ...category,
+  _id: legacyCategoryBySlug.get(category.slug)?._id || `cat-${category.slug}`,
+  color: category.color || legacyCategoryBySlug.get(category.slug)?.color,
+  quizCount: (category.slug === category.rootSlug
+    ? subjectCategories.filter(item => item.rootSlug === category.slug)
+    : [category, ...subjectCategories.filter(item => item.parentSlug === category.slug)])
+    .reduce((count, item) => count + quizCountFor(item.slug), 0),
+}))
+
+const demoCategoryBySlug = new Map(demoCategories.map(category => [category.slug, category]))
+
 const makeQuestion = (id, text, options, correctAnswer, explanation) => ({ id, text, options, correctAnswer, explanation })
 
 export const demoQuizzes = [
   {
     _id: 'demo-js', title: 'JavaScript, in practice', description: 'Test your grasp of the language that powers the web.',
-    category: demoCategories[0], difficulty: 'Medium', timeLimit: 8, totalQuestions: 4, attemptsCount: 184, featured: true,
+    category: demoCategoryBySlug.get('javascript'), difficulty: 'Medium', timeLimit: 8, totalQuestions: 4, attemptsCount: 184, featured: true,
     questions: [
       makeQuestion('js-1', 'What does Array.prototype.map() return?', ['A new array', 'The original array', 'A number', 'Nothing'], 0, 'map creates a new array from the callback results.'),
       makeQuestion('js-2', 'Which value is not equal to itself?', ['NaN', 'undefined', 'null', '0'], 0, 'NaN is the only JavaScript value that is not equal to itself.'),
@@ -23,7 +43,7 @@ export const demoQuizzes = [
   },
   {
     _id: 'demo-react', title: 'React essentials', description: 'A quick check on components, props, and state.',
-    category: demoCategories[1], difficulty: 'Easy', timeLimit: 7, totalQuestions: 4, attemptsCount: 236, featured: true,
+    category: demoCategoryBySlug.get('react'), difficulty: 'Easy', timeLimit: 7, totalQuestions: 4, attemptsCount: 236, featured: true,
     questions: [
       makeQuestion('react-1', 'What is a React component?', ['A reusable UI building block', 'A CSS selector', 'A database table', 'A browser event'], 0, 'Components let you split a UI into independent, reusable pieces.'),
       makeQuestion('react-2', 'How is data commonly passed from parent to child?', ['Props', 'Refs only', 'Context menu', 'Query strings'], 0, 'Props are the standard mechanism for passing values down the component tree.'),
@@ -33,7 +53,7 @@ export const demoQuizzes = [
   },
   {
     _id: 'demo-data', title: 'Data science first principles', description: 'Reason about data, statistics, and model evaluation.',
-    category: demoCategories[5], difficulty: 'Hard', timeLimit: 9, totalQuestions: 4, attemptsCount: 92, featured: true,
+    category: demoCategoryBySlug.get('data-science'), difficulty: 'Hard', timeLimit: 9, totalQuestions: 4, attemptsCount: 92, featured: true,
     questions: [
       makeQuestion('data-1', 'What does the median describe?', ['The middle value in ordered data', 'The most frequent value', 'The full range', 'The sum of values'], 0, 'The median is the central value after sorting observations.'),
       makeQuestion('data-2', 'What is a common purpose of a test set?', ['Estimate performance on unseen data', 'Choose every model feature', 'Replace training data', 'Increase sample size'], 0, 'A held-out test set approximates performance on unseen examples.'),
@@ -43,7 +63,7 @@ export const demoQuizzes = [
   },
   {
     _id: 'demo-html', title: 'HTML foundations', description: 'Semantic markup and the structure of a document.',
-    category: demoCategories[2], difficulty: 'Easy', timeLimit: 6, totalQuestions: 4, attemptsCount: 147, featured: false,
+    category: demoCategoryBySlug.get('html'), difficulty: 'Easy', timeLimit: 6, totalQuestions: 4, attemptsCount: 147, featured: false,
     questions: [
       makeQuestion('html-1', 'Which element represents the main page content?', ['<main>', '<aside>', '<footer>', '<small>'], 0, 'The main element identifies the dominant content of a document.'),
       makeQuestion('html-2', 'What does the alt attribute provide on an image?', ['Text alternative', 'Image dimensions', 'A caption style', 'A download link'], 0, 'Alternative text communicates image content when it cannot be seen.'),
@@ -53,7 +73,7 @@ export const demoQuizzes = [
   },
   {
     _id: 'demo-css', title: 'CSS layout lab', description: 'Explore the layout tools behind responsive interfaces.',
-    category: demoCategories[3], difficulty: 'Medium', timeLimit: 7, totalQuestions: 4, attemptsCount: 113, featured: false,
+    category: demoCategoryBySlug.get('css'), difficulty: 'Medium', timeLimit: 7, totalQuestions: 4, attemptsCount: 113, featured: false,
     questions: [
       makeQuestion('css-1', 'Which layout system is designed for one-dimensional arrangements?', ['Flexbox', 'Grid', 'Float', 'Position'], 0, 'Flexbox is primarily suited to a row or a column of items.'),
       makeQuestion('css-2', 'Which unit is relative to the root font size?', ['rem', 'px', 'vh', 'cm'], 0, 'rem is based on the computed font size of the root element.'),
@@ -63,7 +83,7 @@ export const demoQuizzes = [
   },
   {
     _id: 'demo-python', title: 'Python building blocks', description: 'A refresher on Python syntax and collections.',
-    category: demoCategories[4], difficulty: 'Easy', timeLimit: 7, totalQuestions: 4, attemptsCount: 168, featured: false,
+    category: demoCategoryBySlug.get('python'), difficulty: 'Easy', timeLimit: 7, totalQuestions: 4, attemptsCount: 168, featured: false,
     questions: [
       makeQuestion('py-1', 'Which collection is immutable?', ['Tuple', 'List', 'Set', 'Dictionary'], 0, 'Tuples cannot be changed after they are created.'),
       makeQuestion('py-2', 'What does len([1, 2, 3]) return?', ['3', '2', '4', 'None'], 0, 'len returns the number of items in the list.'),
@@ -73,7 +93,7 @@ export const demoQuizzes = [
   },
   {
     _id: 'demo-general', title: 'Everyday essentials', description: 'A little of everything, from geography to simple maths.',
-    category: demoCategories[6], difficulty: 'Easy', timeLimit: 10, totalQuestions: 4, attemptsCount: 310, featured: true,
+    category: demoCategoryBySlug.get('general-knowledge'), difficulty: 'Easy', timeLimit: 10, totalQuestions: 4, attemptsCount: 310, featured: true,
     questions: [
       makeQuestion('gen-1', 'Capital of France?', ['Paris', 'Rome', 'Berlin', 'Madrid'], 0, 'Paris is the capital and largest city of France.'),
       makeQuestion('gen-2', '5 + 5 = ?', ['10', '8', '9', '11'], 0, 'Five plus five equals ten.'),
@@ -81,6 +101,24 @@ export const demoQuizzes = [
       makeQuestion('gen-4', 'Water freezes at?', ['0°C', '5°C', '10°C', '-5°C'], 0, 'At standard atmospheric pressure, water freezes at zero degrees Celsius.'),
     ],
   },
+  ...subjectQuizzes.map((quiz, index) => ({
+    _id: `demo-subject-${quiz.category}-${quiz.difficulty.toLowerCase()}`,
+    title: quiz.title,
+    description: quiz.description,
+    category: demoCategoryBySlug.get(quiz.category),
+    difficulty: quiz.difficulty,
+    timeLimit: quiz.timeLimit,
+    totalQuestions: quiz.questions.length,
+    attemptsCount: 0,
+    featured: false,
+    questions: quiz.questions.map((item, questionIndex) => makeQuestion(
+      `subject-${index}-${questionIndex}`,
+      item.text,
+      item.options,
+      item.correctAnswer,
+      item.explanation,
+    )),
+  })),
 ]
 
 export const demoLeaderboard = [

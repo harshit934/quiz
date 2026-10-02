@@ -52,10 +52,16 @@ router.get('/', asyncHandler(async (req, res) => {
   if (req.query.difficulty && ['Easy', 'Medium', 'Hard'].includes(req.query.difficulty)) filter.difficulty = req.query.difficulty
   if (req.query.category) {
     const category = mongoose.isValidObjectId(req.query.category)
-      ? await Category.findById(req.query.category).select('_id')
-      : await Category.findOne({ slug: req.query.category }).select('_id')
+      ? await Category.findById(req.query.category).select('_id slug rootSlug')
+      : await Category.findOne({ slug: req.query.category }).select('_id slug rootSlug')
     if (!category) return res.json([])
-    filter.category = category._id
+    const categorySlugs = [category.slug]
+    if (category.slug === category.rootSlug) {
+      categorySlugs.push(...await Category.find({ rootSlug: category.slug }).distinct('slug'))
+    } else {
+      categorySlugs.push(...await Category.find({ parentSlug: category.slug }).distinct('slug'))
+    }
+    filter.category = { $in: await Category.find({ slug: { $in: categorySlugs } }).distinct('_id') }
   }
   if (req.query.search) {
     const search = escapeRegex(String(req.query.search).slice(0, 80))
@@ -65,12 +71,12 @@ router.get('/', asyncHandler(async (req, res) => {
     ]
   }
   const sort = req.query.sort === 'popular' ? { attemptsCount: -1, createdAt: -1 } : { createdAt: -1 }
-  const quizzes = await Quiz.find(filter).select('-createdBy -__v').populate('category', 'name slug icon color').sort(sort).lean()
+  const quizzes = await Quiz.find(filter).select('-createdBy -__v').populate('category', 'name slug icon color parentSlug rootSlug').sort(sort).lean()
   res.json(quizzes)
 }))
 
 router.get('/:id', optionalAuthenticate, asyncHandler(async (req, res) => {
-  const quiz = await Quiz.findById(req.params.id).select('-createdBy -__v').populate('category', 'name slug icon color').populate({
+  const quiz = await Quiz.findById(req.params.id).select('-createdBy -__v').populate('category', 'name slug icon color parentSlug rootSlug').populate({
     path: 'questions',
     select: req.user?.role === 'admin' ? 'text options correctAnswer explanation position' : 'text options position',
     options: { sort: { position: 1 } },
@@ -82,7 +88,7 @@ router.get('/:id', optionalAuthenticate, asyncHandler(async (req, res) => {
 router.post('/:id/submit', asyncHandler(async (req, res) => {
   const input = publicSubmission.parse(req.body)
   const quiz = await Quiz.findById(req.params.id)
-    .populate('category', 'name slug icon color')
+    .populate('category', 'name slug icon color parentSlug rootSlug')
     .populate({ path: 'questions', options: { sort: { position: 1 } } })
   if (!quiz) return res.status(404).json({ message: 'Quiz not found.' })
   if (!quiz.questions.length) return res.status(400).json({ message: 'This quiz has no questions yet.' })
@@ -146,7 +152,7 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
     await Quiz.findByIdAndDelete(quiz._id)
     throw error
   }
-  res.status(201).json(await Quiz.findById(quiz._id).populate('category', 'name slug icon color'))
+  res.status(201).json(await Quiz.findById(quiz._id).populate('category', 'name slug icon color parentSlug rootSlug'))
 }))
 
 router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {
@@ -167,7 +173,7 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
     totalQuestions: questions.length,
   })
   await quiz.save()
-  res.json(await Quiz.findById(quiz._id).populate('category', 'name slug icon color'))
+  res.json(await Quiz.findById(quiz._id).populate('category', 'name slug icon color parentSlug rootSlug'))
 }))
 
 router.delete('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {

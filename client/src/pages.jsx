@@ -13,23 +13,26 @@ import { Badge, CategoryIcon, EmptyState, QuizCard, StatCard } from './component
 import { Pencil, Trash2 } from 'lucide-react'
 import { shuffleQuestionOptions } from './utils/shuffle.js'
 
-const chartColors = ['#9d8cff', '#49d1cb', '#f0bd64', '#f0806f', '#77c59b', '#71aef4', '#d988bb']
+const chartColors = ['#df7254', '#367f76', '#d7a740', '#678bb8', '#4a865f', '#aa789b', '#d58c57']
 const initials = name => (name || '?').split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase()
 const percent = value => `${Math.round(value || 0)}%`
 
 export function HomePage({ categories, quizzes, stats, user, onExplore, onStart, onRegister, onLeaderboard }) {
   const featured = quizzes.filter(quiz => quiz.featured).slice(0, 3)
+  const firstQuiz = featured[0] || quizzes[0]
+  const majorCategories = categories.filter(category => !category.parentSlug).slice(0, 10)
   return (
     <main>
       <section className="hero-section page-width">
         <div className="hero-copy">
           <p className="eyebrow hero-eyebrow"><span className="live-dot" /> Practice that moves you forward</p>
-          <h1>Challenge your<br /><span>knowledge.</span></h1>
-          <p className="hero-description">Small focused quizzes. Clear feedback. A little more confidence every time you show up.</p>
+          <h1>A little curiosity<br /><span>goes a long way.</span></h1>
+          <p className="hero-description">Pick a subject, take a few minutes, and leave knowing something new. Every small win adds up.</p>
           <div className="hero-actions">
-            <button className="button button-primary button-large" onClick={onExplore}>Explore quizzes <ArrowRight size={17} /></button>
-            <button className="button button-outline button-large" onClick={onLeaderboard}><Trophy size={16} /> View leaderboard</button>
+            <button className="button button-primary button-large" disabled={!firstQuiz} onClick={() => firstQuiz && onStart(firstQuiz)}>Start a quiz <ArrowRight size={17} /></button>
+            <button className="button button-outline button-large" onClick={onExplore}>Browse subjects</button>
           </div>
+          <button className="text-button hero-leaderboard-link" onClick={onLeaderboard}><Trophy size={15} /> See how other learners are doing</button>
           <div className="hero-trust"><div className="avatar-stack"><span className="avatar avatar-a">J</span><span className="avatar avatar-b">M</span><span className="avatar avatar-c">A</span><span className="avatar avatar-plus">+</span></div><p><strong>{stats.users ? `${stats.users.toLocaleString()} learners` : 'A growing learning space'}</strong><br /><span>show up curious, leave sharper</span></p></div>
         </div>
         <div className="hero-art" aria-label="A preview of a quiz question and progress">
@@ -64,9 +67,9 @@ export function HomePage({ categories, quizzes, stats, user, onExplore, onStart,
       <section className="category-section">
         <div className="page-width section-block category-inner">
           <div className="section-heading"><div><p className="eyebrow">Learn your way</p><h2>Find your subject</h2></div><button className="text-button" onClick={onExplore}>All topics <ArrowRight size={16} /></button></div>
-          <div className="category-grid">{categories.slice(0, 7).map(category => <button className="category-tile" key={category._id || category.slug} onClick={() => onExplore(category.slug)}>
+          <div className="category-grid">{majorCategories.map(category => <button className="category-tile" key={category._id || category.slug} onClick={() => onExplore(category.slug)}>
             <span className="category-mark" style={{ '--category-color': category.color || 'var(--accent)' }}><CategoryIcon name={category.icon} size={19} /></span>
-            <span><strong>{category.name}</strong><small>{category.quizCount ?? 0} quizzes</small></span><ArrowRight size={16} className="category-arrow" />
+            <span><strong>{category.name}</strong><small>{categories.filter(item => item.parentSlug === category.slug).length} subjects · {category.quizCount ?? 0} quizzes</small></span><ArrowRight size={16} className="category-arrow" />
           </button>)}</div>
         </div>
       </section>
@@ -77,17 +80,24 @@ export function HomePage({ categories, quizzes, stats, user, onExplore, onStart,
   )
 }
 
-export function ExplorePage({ quizzes, categories, onStart }) {
+export function ExplorePage({ quizzes, categories, onStart, initialCategory = 'all' }) {
   const [search, setSearch] = useState('')
-  const [category, setCategory] = useState('all')
+  const [category, setCategory] = useState(initialCategory)
   const [difficulty, setDifficulty] = useState('all')
   const [sort, setSort] = useState('newest')
   const [showFeatured, setShowFeatured] = useState(true)
+  const categoryBySlug = new Map(categories.map(item => [item.slug, item]))
   const hasFilters = Boolean(search.trim()) || category !== 'all' || difficulty !== 'all'
   const filtered = quizzes.filter(quiz => {
     const query = search.trim().toLowerCase()
-    return (!query || `${quiz.title} ${quiz.description} ${quiz.category?.name}`.toLowerCase().includes(query))
-      && (category === 'all' || quiz.category?.slug === category)
+    const categoryName = quiz.category?.name || ''
+    const rootName = categoryBySlug.get(quiz.category?.rootSlug)?.name || ''
+    const matchesCategory = category === 'all'
+      || quiz.category?.slug === category
+      || quiz.category?.rootSlug === category
+      || categories.some(item => item.slug === quiz.category?.slug && item.parentSlug === category)
+    return (!query || `${quiz.title} ${quiz.description} ${categoryName} ${rootName}`.toLowerCase().includes(query))
+      && matchesCategory
       && (difficulty === 'all' || quiz.difficulty === difficulty)
   }).sort((a, b) => sort === 'popular'
     ? (b.attemptsCount || 0) - (a.attemptsCount || 0)
@@ -104,8 +114,22 @@ export function ExplorePage({ quizzes, categories, onStart }) {
       </div>
       <div className="filter-layout">
         <aside className="filter-panel">
-          <div className="filter-section"><p className="filter-title">Category</p><button className={`filter-option ${category === 'all' ? 'filter-active' : ''}`} onClick={() => setCategory('all')}><span>All subjects</span><span>{quizzes.length}</span></button>
-            {categories.map(item => <button key={item.slug} className={`filter-option ${category === item.slug ? 'filter-active' : ''}`} onClick={() => setCategory(item.slug)}><span className="filter-category"><CategoryIcon name={item.icon} size={15} /> {item.name}</span><span>{item.quizCount ?? 0}</span></button>)}
+          <div className="filter-section"><p className="filter-title">Subjects</p><button className={`filter-option ${category === 'all' ? 'filter-active' : ''}`} onClick={() => setCategory('all')}><span>All subjects</span><span>{quizzes.length}</span></button>
+            {categories.filter(item => !item.parentSlug).map(subject => {
+              const children = categories.filter(item => item.parentSlug === subject.slug)
+              const expanded = category === subject.slug || categories.some(item => item.rootSlug === subject.slug && (item.slug === category || item.parentSlug === category))
+              return <details className="subject-filter" key={subject.slug} open={expanded}>
+                <summary className="subject-filter-summary"><span className="filter-category"><CategoryIcon name={subject.icon} size={15} style={{ color: subject.color }} /> {subject.name}</span><span>{subject.quizCount ?? 0}</span></summary>
+                <button className={`filter-option subject-filter-all ${category === subject.slug ? 'filter-active' : ''}`} onClick={() => setCategory(subject.slug)}>All {subject.name}<span>{subject.quizCount ?? 0}</span></button>
+                {children.map(child => {
+                  const nested = categories.filter(item => item.parentSlug === child.slug)
+                  return <div className="subject-filter-branch" key={child.slug}>
+                    <button className={`filter-option ${category === child.slug ? 'filter-active' : ''}`} onClick={() => setCategory(child.slug)}><span>{child.name}</span><span>{child.quizCount ?? 0}</span></button>
+                    {nested.map(item => <button className={`filter-option subject-filter-nested ${category === item.slug ? 'filter-active' : ''}`} key={item.slug} onClick={() => setCategory(item.slug)}><span>{item.name}</span><span>{item.quizCount ?? 0}</span></button>)}
+                  </div>
+                })}
+              </details>
+            })}
           </div>
           <div className="filter-section"><p className="filter-title">Difficulty</p><div className="difficulty-filter">{['all', 'Easy', 'Medium', 'Hard'].map(item => <button key={item} className={`difficulty-pill ${difficulty === item ? 'difficulty-active' : ''}`} onClick={() => setDifficulty(item)}>{item === 'all' ? 'Any level' : item}</button>)}</div></div>
         </aside>
@@ -194,7 +218,10 @@ export function QuizPage({ quiz, onExit, onComplete }) {
             <p className="eyebrow">Choose one answer</p><h2>{question.text}</h2>
             <div className="answer-list" role="group" aria-label="Answer options">{loadedQuestion.options.map((option, index) => {
               const selected = answers[currentId] === option
-              return <button key={`${currentId}-${index}`} aria-pressed={selected} className={`answer-option ${selected ? 'answer-selected' : ''}`} onClick={() => setAnswers(value => ({ ...value, [currentId]: option }))}>
+              const canReviewAnswer = Boolean(answers[currentId]) && Number.isInteger(loadedQuestion.correctAnswer)
+              const isCorrect = canReviewAnswer && index === loadedQuestion.correctAnswer
+              const isIncorrect = canReviewAnswer && selected && !isCorrect
+              return <button key={`${currentId}-${index}`} aria-pressed={selected} className={`answer-option ${selected ? 'answer-selected' : ''} ${isCorrect ? 'answer-correct' : ''} ${isIncorrect ? 'answer-incorrect' : ''}`} onClick={() => setAnswers(value => ({ ...value, [currentId]: option }))}>
                 <span className="answer-letter">{String.fromCharCode(65 + index)}</span><span>{option}</span>{selected && <CheckCircle2 size={18} className="answer-check" />}
               </button>
             })}</div>
@@ -233,10 +260,10 @@ export function ResultPage({ attempt, onTryAgain, onExplore, onDashboard }) {
   return (
     <main className="page-width page-main result-page">
       <div className="result-heading"><span className={`result-status ${attempt.passed ? 'status-pass' : 'status-try'}`}>{attempt.passed ? <CheckCircle2 size={16} /> : <Activity size={16} />}{attempt.passed ? 'Strong work' : 'Keep building'}</span><p className="eyebrow">Your session is complete</p><h1>Quiz complete<span className="brand-period">.</span></h1><p className="muted">A clear picture of what clicked and where to focus next.</p></div>
-      <section className="score-hero"><div className="score-ring" style={{ '--score': `${attempt.percentage || 0}%` }}><div><strong>{attempt.percentage || 0}<small>%</small></strong><span>accuracy</span></div></div><div className="score-story"><p className="eyebrow">{quiz.category?.name || 'Quiz result'} · {quiz.difficulty || ''}</p><h2>{quiz.title || 'Quiz result'}</h2><p className="muted">{attempt.passed ? 'You reached the 60% pass mark. Keep your momentum going.' : 'Every result is a useful baseline. Review a few questions and try again.'}</p><div className="score-actions"><button className="button button-primary" onClick={onTryAgain}>Try again <ArrowRight size={16} /></button><button className="button button-quiet" onClick={onDashboard}>Open dashboard</button></div></div><div className="score-total"><span>Total score</span><strong>{correct}<i>/{rows.length || quiz.totalQuestions || 0}</i></strong><span>{attempt.passed ? 'Pass' : 'Not passed yet'}</span></div></section>
+      <section className="score-hero"><div className="score-ring" style={{ '--score': `${attempt.percentage || 0}%` }}><div><strong>{attempt.percentage || 0}<small>%</small></strong><span>accuracy</span></div></div><div className="score-story"><p className="eyebrow">{quiz.category?.name || 'Quiz result'} · {quiz.difficulty || ''}</p><h2>{quiz.title || 'Quiz result'}</h2><p className="muted">{attempt.passed ? 'You reached the 60% pass mark. Keep your momentum going.' : 'Every result is a useful baseline. Review a few questions and try again.'}</p><div className="score-actions"><button className="button button-primary" onClick={onTryAgain}>Try again <ArrowRight size={16} /></button><button className="button button-outline" onClick={() => document.getElementById('question-review')?.scrollIntoView({ behavior: 'smooth' })}><BookOpenCheck size={15} /> Review answers</button><button className="button button-quiet" onClick={onDashboard}>Open dashboard</button></div></div><div className="score-total"><span>Total score</span><strong>{correct}<i>/{rows.length || quiz.totalQuestions || 0}</i></strong><span>{attempt.passed ? 'Pass' : 'Not passed yet'}</span></div></section>
       <div className="stats-grid result-stats"><StatCard icon={CheckCircle2} label="Correct" value={correct} detail="Well remembered" accent="green" /><StatCard icon={XCircle} label="Incorrect" value={incorrect} detail="Worth revisiting" accent="rose" /><StatCard icon={CircleHelpIcon} label="Unanswered" value={unanswered} detail="Could be a next step" accent="amber" /><StatCard icon={Clock3} label="Time taken" value={`${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, '0')}`} detail="Minutes : seconds" accent="blue" /></div>
-      <section className="result-analysis"><div className="chart-panel result-chart"><div className="panel-heading"><div><p className="eyebrow">At a glance</p><h2>Answer breakdown</h2></div></div><div className="result-chart-body"><div className="result-donut"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={chartData} dataKey="value" innerRadius="68%" outerRadius="88%" paddingAngle={4} stroke="none">{scoreData.map(item => <Cell key={item.name} fill={item.fill} />)}</Pie><Tooltip contentStyle={{ background: '#181a25', border: '1px solid #2c2f3d', borderRadius: 12, color: '#f6f4ff' }} /></PieChart></ResponsiveContainer><div><strong>{attempt.percentage || 0}%</strong><span>correct</span></div></div><div className="breakdown-legend">{scoreData.map(item => <div key={item.name}><span><i style={{ background: item.fill }} />{item.name}</span><strong>{item.value}</strong></div>)}</div></div></div><div className="chart-panel category-insight"><div className="panel-heading"><div><p className="eyebrow">Keep learning</p><h2>What to revisit</h2></div><span className="insight-icon"><BookOpenCheck size={18} /></span></div><p className="muted">{incorrect + unanswered ? `${incorrect + unanswered} question${incorrect + unanswered === 1 ? '' : 's'} to revisit can help turn this into a stronger result.` : 'A perfect round. Try a harder quiz to keep stretching your knowledge.'}</p><div className="insight-meter"><span style={{ width: `${attempt.percentage || 0}%` }} /></div><div className="insight-meta"><span>Session accuracy</span><strong>{attempt.percentage || 0}%</strong></div><button className="text-button" onClick={onExplore}>Find another quiz <ArrowRight size={15} /></button></div></section>
-      <section className="review-section"><div className="section-heading review-heading"><div><p className="eyebrow">Learn from the details</p><h2>Question review</h2></div><button className="button button-quiet" onClick={() => setShowReview(value => !value)}>{showReview ? 'Hide review' : 'Show review'} <ChevronDown className={showReview ? 'rotate-chevron' : ''} size={16} /></button></div>{showReview && <div className="review-list">{rows.map((row, index) => {
+      <section className="result-analysis"><div className="chart-panel result-chart"><div className="panel-heading"><div><p className="eyebrow">At a glance</p><h2>Answer breakdown</h2></div></div><div className="result-chart-body"><div className="result-donut"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={chartData} dataKey="value" innerRadius="68%" outerRadius="88%" paddingAngle={4} stroke="none">{scoreData.map(item => <Cell key={item.name} fill={item.fill} />)}</Pie><Tooltip contentStyle={{ background: '#fffdf8', border: '1px solid #e8e1d4', borderRadius: 12, color: '#263a36' }} /></PieChart></ResponsiveContainer><div><strong>{attempt.percentage || 0}%</strong><span>correct</span></div></div><div className="breakdown-legend">{scoreData.map(item => <div key={item.name}><span><i style={{ background: item.fill }} />{item.name}</span><strong>{item.value}</strong></div>)}</div></div></div><div className="chart-panel category-insight"><div className="panel-heading"><div><p className="eyebrow">Keep learning</p><h2>What to revisit</h2></div><span className="insight-icon"><BookOpenCheck size={18} /></span></div><p className="muted">{incorrect + unanswered ? `${incorrect + unanswered} question${incorrect + unanswered === 1 ? '' : 's'} to revisit can help turn this into a stronger result.` : 'A perfect round. Try a harder quiz to keep stretching your knowledge.'}</p><div className="insight-meter"><span style={{ width: `${attempt.percentage || 0}%` }} /></div><div className="insight-meta"><span>Session accuracy</span><strong>{attempt.percentage || 0}%</strong></div><button className="text-button" onClick={onExplore}>Find another quiz <ArrowRight size={15} /></button></div></section>
+      <section id="question-review" className="review-section"><div className="section-heading review-heading"><div><p className="eyebrow">Learn from the details</p><h2>Question review</h2></div><button className="button button-quiet" onClick={() => setShowReview(value => !value)}>{showReview ? 'Hide review' : 'Show review'} <ChevronDown className={showReview ? 'rotate-chevron' : ''} size={16} /></button></div>{showReview && <div className="review-list">{rows.map((row, index) => {
         const question = row.question
         const answerIndex = question.options?.indexOf(row.selectedOption) ?? -1
         const right = answerIndex === question.correctAnswer
@@ -271,9 +298,12 @@ export function DashboardPage({ user, data, loading, onOpenAttempt, onExplore })
 
 export function LeaderboardPage({ categories, onCategoryChange, category, entries, currentUser, isOffline }) {
   const rows = entries?.length ? entries : isOffline ? demoLeaderboard : []
+  const podium = rows.slice(0, 3)
+  const standings = rows.slice(3)
   return (
     <main className="page-width page-main leaderboard-page"><div className="page-title-row"><div><p className="eyebrow">{isOffline ? 'Local demo preview' : 'A little friendly momentum'}</p><h1>Leaderboard</h1><p className="muted">Recognizing the practice, not just the perfect scores.</p></div><label className="select-field leaderboard-select"><span className="sr-only">Filter leaderboard by category</span><select value={category} onChange={event => onCategoryChange(event.target.value)}><option value="">All categories</option>{categories.map(item => <option key={item.slug} value={item.slug}>{item.name}</option>)}</select><ChevronDown size={15} /></label></div>
-      <section className="leaderboard-panel"><div className="leaderboard-head"><span>Rank</span><span>Learner</span><span>Quiz</span><span>Score</span><span>Date</span></div>{rows.length ? rows.map((entry, index) => <article key={`${entry.name}-${entry.date}-${index}`} className={`leaderboard-row ${index < 3 ? `leaderboard-top top-${index + 1}` : ''} ${entry.currentUser || entry.name === currentUser?.name ? 'leaderboard-me' : ''}`}><span className="rank-cell">{index < 3 ? <span className={`rank-medal medal-${index + 1}`}>{index + 1}</span> : <span className="rank-number">{entry.rank || index + 1}</span>}</span><span className="leader-user"><span className={`avatar ${index < 3 ? `top-avatar top-avatar-${index + 1}` : ''}`}>{initials(entry.name)}</span><span><strong>{entry.name}{entry.currentUser || entry.name === currentUser?.name ? <small className="you-label">You</small> : null}</strong><small>{entry.category}</small></span></span><span className="leader-quiz">{entry.quiz}</span><span className="leader-score"><strong>{entry.percentage}%</strong><small>{entry.score} correct</small></span><span className="leader-date">{new Date(entry.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span></article>) : <EmptyState icon={Trophy} title="The leaderboard is getting warmed up" detail="Complete a quiz to be the first name on the board." />}</section>
+      {podium.length > 0 && <section className="leaderboard-podium" aria-label="Top three learners">{podium.map((entry, index) => <article className={`podium-card podium-place-${index + 1}`} key={`${entry.name}-${entry.date}-${index}`}><span className="podium-rank">{index === 0 ? <Trophy size={16} /> : <Medal size={16} />} {index + 1}{index === 0 ? 'st' : index === 1 ? 'nd' : 'rd'} place</span><span className={`avatar podium-avatar top-avatar top-avatar-${index + 1}`}>{initials(entry.name)}</span><strong className="podium-name">{entry.name}{entry.currentUser || entry.name === currentUser?.name ? <small className="you-label">You</small> : null}</strong><span className="podium-category">{entry.category}</span><span className="podium-score">{entry.percentage}%</span><span className="podium-quiz">{entry.quiz}</span></article>)}</section>}
+      {(standings.length > 0 || podium.length === 0) && <section className="leaderboard-panel">{standings.length > 0 ? <><div className="leaderboard-head"><span>Rank</span><span>Learner</span><span>Quiz</span><span>Score</span><span>Date</span></div>{standings.map((entry, index) => <article key={`${entry.name}-${entry.date}-${index + 3}`} className={`leaderboard-row ${entry.currentUser || entry.name === currentUser?.name ? 'leaderboard-me' : ''}`}><span className="rank-cell"><span className="rank-number">{entry.rank || index + 4}</span></span><span className="leader-user"><span className="avatar">{initials(entry.name)}</span><span><strong>{entry.name}{entry.currentUser || entry.name === currentUser?.name ? <small className="you-label">You</small> : null}</strong><small>{entry.category}</small></span></span><span className="leader-quiz">{entry.quiz}</span><span className="leader-score"><strong>{entry.percentage}%</strong><small>{entry.score} correct</small></span><span className="leader-date">{new Date(entry.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span></article>)}</> : <EmptyState icon={Trophy} title="The leaderboard is getting warmed up" detail="Complete a quiz to be the first name on the board." />}</section>}
       <div className="leaderboard-note"><UsersRound size={16} /><span>Only first names and quiz results are shown. Email addresses and private account details stay private.</span></div>
     </main>
   )
@@ -305,7 +335,7 @@ export function AuthPage({ mode, onModeChange, onSubmit, onContinueDemo }) {
   }
 
   return (
-    <main className="auth-page"><div className="auth-backdrop" /><div className="auth-wrap"><button className="back-link auth-back" onClick={() => onModeChange('#home')}><ArrowLeft size={16} /> Back to home</button><section className="auth-card"><div className="auth-mark"><BookOpenCheck size={20} /></div><p className="eyebrow">{register ? 'Start your learning practice' : 'Welcome back'}</p><h1>{register ? 'Create your account' : 'Good to see you again.'}</h1><p className="muted">{register ? 'Save your quiz history and keep track of what is clicking.' : 'Sign in to pick up where your curiosity left off.'}</p>
+    <main className="auth-page"><div className="auth-backdrop" /><div className="auth-wrap"><button className="back-link auth-back" onClick={() => onModeChange('#home')}><ArrowLeft size={16} /> Back to home</button><section className="auth-card"><div className="auth-illustration"><span className="auth-art-mark"><Sparkles size={19} /></span><p className="eyebrow">A few curious minutes</p><h2>Good things grow one question at a time.</h2><p>Make a little space for learning. The rest adds up.</p><div className="auth-sample"><span className="auth-sample-label"><CategoryIcon name="atom" size={15} /> TODAY'S LITTLE CHALLENGE</span><strong>What would you like to know next?</strong><div className="auth-sample-options"><i /><i /><i /></div><span className="auth-sample-foot"><Clock3 size={13} /> Just a few minutes</span></div></div><div className="auth-form-panel"><div className="auth-mark"><BookOpenCheck size={20} /></div><p className="eyebrow">{register ? 'Start your learning practice' : 'Welcome back'}</p><h1>{register ? 'Create your account' : 'Good to see you again.'}</h1><p className="muted">{register ? 'Save your quiz history and keep track of what is clicking.' : 'Sign in to pick up where your curiosity left off.'}</p>
       <form onSubmit={submit} className="auth-form" noValidate>
         {register && <label className="field-label">Your name<input autoComplete="name" required minLength={2} maxLength={60} value={name} onChange={event => setName(event.target.value)} placeholder="Jordan Lee" /></label>}
         <label className="field-label">Email address<input autoComplete="email" required type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" /></label>
@@ -315,7 +345,7 @@ export function AuthPage({ mode, onModeChange, onSubmit, onContinueDemo }) {
       </form>
       <p className="auth-switch">{register ? 'Already have an account?' : 'New to Quizly?'} <button onClick={() => onModeChange(register ? '#login' : '#register')}>{register ? 'Log in' : 'Create an account'}</button></p>
       <div className="auth-divider"><span>or</span></div><button className="button button-outline demo-button" onClick={onContinueDemo}><UserRound size={16} /> Continue with a demo profile</button><p className="auth-note"><Shield size={13} /> Your personal information stays private.</p>
-      </section><p className="auth-footnote">Focused practice. Useful feedback. No noise.</p></div></main>
+      </div></section><p className="auth-footnote">Focused practice. Useful feedback. No noise.</p></div></main>
   )
 }
 

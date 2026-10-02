@@ -346,7 +346,7 @@ export default function App() {
   } else if (routeName === 'login' || routeName === 'register') {
     content = <AuthPage mode={routeName} onModeChange={navigate} onSubmit={values => submitAuth(values, routeName)} onContinueDemo={continueDemo} />
   } else if (routeName === 'explore') {
-    content = <ExplorePage quizzes={quizzes} categories={categories} onStart={onStart} />
+    content = <ExplorePage key={routeId || 'all'} quizzes={quizzes} categories={categories} onStart={onStart} initialCategory={routeId || 'all'} />
   } else if (routeName === 'quiz') {
     content = activeQuiz ? <QuizPage key={activeQuiz._id} quiz={activeQuiz} onExit={() => navigate('#explore')} onComplete={completeQuiz} /> : quizLoadError ? <main className="page-width page-main"><div className="access-denied"><AlertCircle size={22} /><h1>Quiz unavailable</h1><p className="muted">{quizLoadError}</p><button className="button button-primary" onClick={() => navigate('#explore')}>Browse quizzes</button></div></main> : <main className="page-width page-main"><LoadingState label="Preparing your quiz" /></main>
   } else if (routeName === 'result') {
@@ -360,7 +360,7 @@ export default function App() {
       ? <AdminPage categories={categories} quizzes={quizzes} stats={adminStats} users={adminUsers} loading={loadingAdmin} onSaveQuiz={saveQuiz} onDeleteQuiz={deleteQuiz} onSaveCategory={saveCategory} onDeleteCategory={deleteCategory} onLoadQuiz={loadFullQuiz} />
       : <main className="page-width page-main"><div className="access-denied"><AlertCircle size={22} /><h1>Admin access required</h1><p className="muted">Sign in with an administrator account to open this workspace.</p><button className="button button-primary" onClick={() => navigate('#login')}>Sign in <ArrowRightIcon /></button></div></main>
   } else {
-    content = <HomePage categories={categories} quizzes={quizzes} stats={stats} user={user} onExplore={() => navigate('#explore')} onStart={onStart} onRegister={() => navigate(user ? '#dashboard' : '#register')} onLeaderboard={() => navigate('#leaderboard')} />
+    content = <HomePage categories={categories} quizzes={quizzes} stats={stats} user={user} onExplore={slug => navigate(slug ? `#explore/${slug}` : '#explore')} onStart={onStart} onRegister={() => navigate(user ? '#dashboard' : '#register')} onLeaderboard={() => navigate('#leaderboard')} />
   }
 
   const immersive = routeName === 'quiz' || routeName === 'login' || routeName === 'register'
