@@ -12,6 +12,7 @@ import { demoLeaderboard } from './data/demoData.js'
 import { Badge, CategoryIcon, EmptyState, QuizCard, StatCard } from './components/ui.jsx'
 import { Pencil, Trash2 } from 'lucide-react'
 import { shuffleQuestionOptions } from './utils/shuffle.js'
+import { authValidationError } from './utils/authValidation.js'
 
 const chartColors = ['#df7254', '#367f76', '#d7a740', '#678bb8', '#4a865f', '#aa789b', '#d58c57']
 const initials = name => (name || '?').split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase()
@@ -316,7 +317,7 @@ export function LeaderboardPage({ categories, onCategoryChange, category, entrie
 
 export function AuthPage({ mode, onModeChange, onSubmit, onContinueDemo }) {
   const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [visible, setVisible] = useState(false)
   const [error, setError] = useState('')
@@ -326,12 +327,13 @@ export function AuthPage({ mode, onModeChange, onSubmit, onContinueDemo }) {
   async function submit(event) {
     event.preventDefault()
     setError('')
-    if (register && name.trim().length < 2) return setError('Please enter your name (at least 2 characters).')
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setError('Enter a valid email address.')
-    if (password.length < 8) return setError('Use a password with at least 8 characters.')
+    const validationError = authValidationError({ mode, name, identifier, password })
+    if (validationError) return setError(validationError)
     setLoading(true)
     try {
-      await onSubmit({ name: name.trim(), email: email.trim(), password })
+      await onSubmit(register
+        ? { name: name.trim(), email: identifier.trim(), password }
+        : { identifier: identifier.trim(), password })
     } catch (submitError) {
       setError(submitError.message)
     } finally {
@@ -343,7 +345,7 @@ export function AuthPage({ mode, onModeChange, onSubmit, onContinueDemo }) {
     <main className="auth-page"><div className="auth-backdrop" /><div className="auth-wrap"><button className="back-link auth-back" onClick={() => onModeChange('#home')}><ArrowLeft size={16} /> Back to home</button><section className="auth-card"><div className="auth-illustration"><span className="auth-art-mark"><Sparkles size={19} /></span><p className="eyebrow">A few curious minutes</p><h2>Good things grow one question at a time.</h2><p>Make a little space for learning. The rest adds up.</p><div className="auth-sample"><span className="auth-sample-label"><CategoryIcon name="atom" size={15} /> TODAY'S LITTLE CHALLENGE</span><strong>What would you like to know next?</strong><div className="auth-sample-options"><i /><i /><i /></div><span className="auth-sample-foot"><Clock3 size={13} /> Just a few minutes</span></div></div><div className="auth-form-panel"><div className="auth-mark"><BookOpenCheck size={20} /></div><p className="eyebrow">{register ? 'Start your learning practice' : 'Welcome back'}</p><h1>{register ? 'Create your account' : 'Good to see you again.'}</h1><p className="muted">{register ? 'Save your quiz history and keep track of what is clicking.' : 'Sign in to pick up where your curiosity left off.'}</p>
       <form onSubmit={submit} className="auth-form" noValidate>
         {register && <label className="field-label">Your name<input autoComplete="name" required minLength={2} maxLength={60} value={name} onChange={event => setName(event.target.value)} placeholder="Jordan Lee" /></label>}
-        <label className="field-label">Email address<input autoComplete="email" required type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" /></label>
+        <label className="field-label">{register ? 'Email address' : 'Email or username'}<input autoComplete={register ? 'email' : 'username'} required type={register ? 'email' : 'text'} value={identifier} onChange={event => setIdentifier(event.target.value)} placeholder={register ? 'you@example.com' : 'Email address or username'} /></label>
         <label className="field-label">Password<span className="password-field"><input autoComplete={register ? 'new-password' : 'current-password'} required minLength={8} type={visible ? 'text' : 'password'} value={password} onChange={event => setPassword(event.target.value)} placeholder="At least 8 characters" /><button type="button" className="password-toggle" aria-label={visible ? 'Hide password' : 'Show password'} onClick={() => setVisible(value => !value)}>{visible ? 'Hide' : 'Show'}</button></span></label>
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="button button-primary auth-submit" type="submit" disabled={loading}>{loading ? <span className="button-spinner" /> : register ? 'Create account' : 'Sign in'} <ArrowRight size={16} /></button>

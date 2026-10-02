@@ -29,14 +29,14 @@ test('JWT login roles control access to admin APIs', async () => {
   process.env.JWT_SECRET = secret
   const identities = {
     'learner@example.test': { id: '507f1f77bcf86cd799439011', name: 'Learner', email: 'learner@example.test', role: 'user' },
-    'admin@example.test': { id: '507f1f77bcf86cd799439012', name: 'Admin', email: 'admin@example.test', role: 'admin' },
+    'admin@example.test': { id: '507f1f77bcf86cd799439012', name: 'Admin', email: 'admin@example.test', username: 'fixture_admin', role: 'admin' },
   }
-  User.findOne = query => ({
-    select: async () => ({
-      ...identities[query.email],
-      comparePassword: async password => password === 'test-password',
-    }),
-  })
+  User.findOne = query => ({ select: async () => {
+    const identity = query.email
+      ? identities[query.email]
+      : Object.values(identities).find(item => item.username === query.username)
+    return identity && { ...identity, comparePassword: async password => password === 'test-password' }
+  } })
   User.findById = id => {
     const identity = Object.values(identities).find(item => item.id === String(id))
     const user = identity && { ...identity, _id: identity.id, save: async () => {} }
@@ -67,14 +67,14 @@ test('JWT login roles control access to admin APIs', async () => {
   const baseUrl = `http://127.0.0.1:${address.port}`
 
   try {
-    const login = async email => fetch(`${baseUrl}/auth/login`, {
+    const login = async (identity, field = 'identifier') => fetch(`${baseUrl}/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email, password: 'test-password' }),
+      body: JSON.stringify({ [field]: identity, password: 'test-password' }),
     })
     const [learnerLogin, adminLogin] = await Promise.all([
-      login('learner@example.test'),
-      login('admin@example.test'),
+      login('learner@example.test', 'email'),
+      login('fixture_admin'),
     ])
     assert.equal(learnerLogin.status, 200)
     assert.equal(adminLogin.status, 200)

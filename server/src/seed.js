@@ -85,6 +85,46 @@ const starterQuizzes = [
   },
 ]
 
+export async function seedAdminAccount({ username = process.env.ADMIN_USERNAME, email = process.env.ADMIN_EMAIL, password = process.env.ADMIN_PASSWORD } = {}) {
+  const normalizedUsername = username?.trim().toLowerCase()
+  if (!password) return null
+
+  if (normalizedUsername) {
+    if (!/^[a-z0-9._-]{3,40}$/.test(normalizedUsername)) {
+      console.error('ADMIN_USERNAME must be 3-40 characters and contain only letters, numbers, dots, underscores, or hyphens.')
+      return null
+    }
+    const normalizedEmail = `${normalizedUsername}@quizly.local`
+    const [userByUsername, userByEmail] = await Promise.all([
+      User.findOne({ username: normalizedUsername }),
+      User.findOne({ email: normalizedEmail }),
+    ])
+    if (userByUsername && userByEmail && String(userByUsername._id) !== String(userByEmail._id)) {
+      console.error('Admin account was not provisioned because ADMIN_USERNAME conflicts with an existing account.')
+      return null
+    }
+    const existing = userByUsername || userByEmail
+    if (existing) {
+      if (existing.role !== 'admin') {
+        console.error('Admin account was not provisioned because ADMIN_USERNAME belongs to a non-admin account.')
+        return null
+      }
+      return existing
+    }
+    const user = await User.create({ name: normalizedUsername, username: normalizedUsername, email: normalizedEmail, password, role: 'admin' })
+    console.info(`Created initial administrator account for ${normalizedUsername}.`)
+    return user
+  }
+
+  const normalizedEmail = email?.trim().toLowerCase()
+  if (!normalizedEmail) return null
+  const existing = await User.findOne({ email: normalizedEmail })
+  if (existing) return existing
+  const user = await User.create({ name: 'Platform Admin', email: normalizedEmail, password, role: 'admin' })
+  console.info(`Created initial administrator account for ${normalizedEmail}.`)
+  return user
+}
+
 export async function seedStarterContent() {
   const categoryData = flattenSubjectCategories()
   await Promise.all(categoryData.map(({ parentSlug, rootSlug, legacy, ...category }) => Category.updateOne(
@@ -136,11 +176,5 @@ export async function seedStarterContent() {
     }
   }
 
-  if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
-    const email = process.env.ADMIN_EMAIL.toLowerCase().trim()
-    if (!await User.exists({ email })) {
-      await User.create({ name: 'Platform Admin', email, password: process.env.ADMIN_PASSWORD, role: 'admin' })
-      console.info(`Created initial admin account for ${email}`)
-    }
-  }
+  await seedAdminAccount()
 }

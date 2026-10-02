@@ -5,10 +5,15 @@ import User from '../models/User.js'
 import asyncHandler from '../middleware/asyncHandler.js'
 
 const router = Router()
-const credentialsSchema = z.object({
+const registrationCredentialsSchema = z.object({
   email: z.string().trim().email().max(254),
   password: z.string().min(8).max(100),
 })
+const loginCredentialsSchema = z.object({
+  identifier: z.string().trim().min(3).max(254).optional(),
+  email: z.string().trim().email().max(254).optional(),
+  password: z.string().min(8).max(100),
+}).refine(input => input.identifier || input.email, { path: ['identifier'], message: 'Enter your email or username.' })
 
 function createToken(user) {
   if (!process.env.JWT_SECRET) {
@@ -26,17 +31,19 @@ function publicUser(user) {
 router.post('/register', asyncHandler(async (req, res) => {
   const input = z.object({
     name: z.string().trim().min(2).max(60),
-    ...credentialsSchema.shape,
+    ...registrationCredentialsSchema.shape,
   }).parse(req.body)
   const user = await User.create(input)
   res.status(201).json({ token: createToken(user), user: publicUser(user) })
 }))
 
 router.post('/login', asyncHandler(async (req, res) => {
-  const input = credentialsSchema.parse(req.body)
-  const user = await User.findOne({ email: input.email.toLowerCase() }).select('+password')
+  const input = loginCredentialsSchema.parse(req.body)
+  const identity = (input.identifier || input.email).toLowerCase()
+  const lookup = identity.includes('@') ? { email: identity } : { username: identity }
+  const user = await User.findOne(lookup).select('+password')
   if (!user || !(await user.comparePassword(input.password))) {
-    return res.status(401).json({ message: 'Email or password is incorrect.' })
+    return res.status(401).json({ message: 'Email, username, or password is incorrect.' })
   }
   res.json({ token: createToken(user), user: publicUser(user) })
 }))

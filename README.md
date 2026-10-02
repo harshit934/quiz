@@ -7,11 +7,11 @@ A React quiz experience backed by an Express API and MongoDB. The original singl
 Prerequisites: Node.js 20 or newer and a MongoDB connection string (local MongoDB or MongoDB Atlas).
 
 1. Install dependencies from the project root with `npm install`.
-2. Copy `.env.example` to `.env` and set `MONGODB_URI` and a long, private `JWT_SECRET`. Set a private `ADMIN_EMAIL` and `ADMIN_PASSWORD` for the initial administrator account.
+2. Copy `.env.example` to `.env` and set `MONGODB_URI` and a long, private `JWT_SECRET`. Set private `ADMIN_USERNAME` and `ADMIN_PASSWORD` values for the initial username-based administrator account. `ADMIN_EMAIL` remains supported for legacy email-based provisioning.
 3. Start both applications with `npm run dev`.
 4. Open the Vite URL shown in the terminal, normally `http://localhost:5173`.
 
-On first connection the API seeds the seven categories, six subject quizzes, and the original 45 general-knowledge questions. It creates the initial administrator only when both admin environment variables are set and the account does not already exist. Do not use the example admin credentials in a shared environment.
+On first connection the API seeds the seven categories, six subject quizzes, and the original 45 general-knowledge questions. It creates the configured administrator only when both admin environment variables are set and the account does not already exist. Username-based administrators sign in with their username and receive the same JWT and server-side admin authorization as email-based administrators. Never put admin credentials or JWT secrets in client code or shared source control.
 
 Without MongoDB, the client remains usable in local demo mode: quiz answers and results are stored in the current browser. Authentication, synchronized history, and admin APIs require MongoDB.
 
@@ -27,7 +27,7 @@ The API listens on port `4000` by default. The client proxies `/api` requests to
 
 The repository includes `vercel.json` for the React client and `render.yaml` for the API. Push the project to a Git provider, then import the same repository into Vercel and Render. Render can create the API service from the blueprint; Vercel builds from the project root and publishes `client/dist/`.
 
-Create a MongoDB Atlas database and set `MONGODB_URI`, `CLIENT_URL`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` in the Render service environment. Render generates `JWT_SECRET`. Set `CLIENT_URL` to the exact Vercel site origin, for example `https://your-project.vercel.app`. In Vercel, set `VITE_API_URL` to the Render service origin, for example `https://quiz-platform-api.onrender.com`, then redeploy the client. Keep all secrets in the provider dashboards, never in committed files.
+Create a MongoDB Atlas database and set `MONGODB_URI`, `CLIENT_URL`, `ADMIN_USERNAME`, and `ADMIN_PASSWORD` in the Render service environment. Render generates `JWT_SECRET`. For a legacy email-based administrator, use `ADMIN_EMAIL` and `ADMIN_PASSWORD` instead. Set `CLIENT_URL` to the exact client site origin. Keep all secrets in provider dashboards, never in committed files.
 
 ## Project layout
 
