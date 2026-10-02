@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, BookOpenCheck, LoaderCircle } from 'lucide-react'
 import Navbar from './components/Navbar.jsx'
+import AdminQuestionsPage from './AdminQuestionsPage.jsx'
 import { LoadingState, Toast } from './components/ui.jsx'
 import { demoCategories, demoQuizzes } from './data/demoData.js'
 import { fisherYates } from './utils/shuffle.js'
@@ -65,6 +66,8 @@ function localDashboard(user) {
 export default function App() {
   const [route, setRoute] = useState(window.location.hash || '#home')
   const [user, setUser] = useState(storedUser)
+  const [adminVerified, setAdminVerified] = useState(false)
+  const [adminCheckStatus, setAdminCheckStatus] = useState('idle')
   const [categories, setCategories] = useState(demoCategories)
   const [quizzes, setQuizzes] = useState(demoQuizzes)
   const [stats, setStats] = useState(defaultStats)
@@ -73,6 +76,7 @@ export default function App() {
   const [dashboard, setDashboard] = useState(null)
   const [adminStats, setAdminStats] = useState(null)
   const [adminUsers, setAdminUsers] = useState([])
+  const [adminQuizStats, setAdminQuizStats] = useState([])
   const [leaderboardOffline, setLeaderboardOffline] = useState(false)
   const [loadingDashboard, setLoadingDashboard] = useState(false)
   const [loadingAdmin, setLoadingAdmin] = useState(false)
@@ -96,6 +100,28 @@ export default function App() {
     window.addEventListener('hashchange', syncRoute)
     return () => window.removeEventListener('hashchange', syncRoute)
   }, [])
+
+  useEffect(() => {
+    if (user?.role !== 'admin' || adminVerified) return
+    let current = true
+    setAdminCheckStatus('checking')
+    request('/users/profile').then(profile => {
+      if (!current) return
+      localStorage.setItem('quizly-user', JSON.stringify(profile))
+      setUser(profile)
+      setAdminVerified(profile.role === 'admin')
+      setAdminCheckStatus(profile.role === 'admin' ? 'verified' : 'denied')
+    }).catch(error => {
+      if (!current) return
+      if (error.status === 401) {
+        clearToken()
+        localStorage.removeItem('quizly-user')
+        setUser(null)
+      }
+      setAdminCheckStatus('denied')
+    })
+    return () => { current = false }
+  }, [user, adminVerified])
 
   const loadCatalog = useCallback(async () => {
     const [categoryResult, quizResult, statsResult] = await Promise.allSettled([
@@ -122,14 +148,16 @@ export default function App() {
         request('/users/dashboard').then(setDashboard).catch(() => setDashboard(offline)).finally(() => setLoadingDashboard(false))
       }
     }
-    if (routeName === 'admin' && user?.role === 'admin') {
+    if (routeName === 'admin' && user?.role === 'admin' && adminVerified) {
       setLoadingAdmin(true)
-      Promise.all([request('/admin/stats'), request('/admin/users')]).then(([overview, users]) => {
+      Promise.all([request('/admin/stats'), request('/admin/users'), request('/admin/stats/quizzes')]).then(([overview, users, quizPerformance]) => {
         setAdminStats(overview)
         setAdminUsers(users)
+        setAdminQuizStats(quizPerformance)
       }).catch(() => {
         setAdminStats(null)
         setAdminUsers([])
+        setAdminQuizStats([])
       }).finally(() => setLoadingAdmin(false))
     }
     if (routeName === 'leaderboard') {
@@ -142,7 +170,7 @@ export default function App() {
         setLeaderboardOffline(true)
       })
     }
-  }, [routeName, routeId, user, leaderboardCategory])
+  }, [routeName, routeId, user, adminVerified, leaderboardCategory])
 
   useEffect(() => {
     if (routeName === 'result' && routeId && !result) {
@@ -174,6 +202,8 @@ export default function App() {
     clearToken()
     localStorage.removeItem('quizly-user')
     setUser(null)
+    setAdminVerified(false)
+    setAdminCheckStatus('idle')
     setDashboard(null)
     navigate('#home')
     notify('You are signed out.')
@@ -184,8 +214,10 @@ export default function App() {
     setToken(data.token)
     localStorage.setItem('quizly-user', JSON.stringify(data.user))
     setUser(data.user)
+    setAdminVerified(data.user.role === 'admin')
+    setAdminCheckStatus(data.user.role === 'admin' ? 'verified' : 'idle')
     setResult(null)
-    navigate('#dashboard')
+    navigate(data.user.role === 'admin' ? '#admin/dashboard' : '#dashboard')
     notify(mode === 'register' ? 'Your account is ready.' : 'Welcome back.')
   }
 
@@ -194,6 +226,8 @@ export default function App() {
     setToken('demo-session')
     localStorage.setItem('quizly-user', JSON.stringify(demoUser))
     setUser(demoUser)
+    setAdminVerified(false)
+    setAdminCheckStatus('idle')
     setDashboard(localDashboard(demoUser))
     navigate('#dashboard')
     notify('You are exploring with a local demo profile.')
@@ -338,6 +372,26 @@ export default function App() {
     try { return await request(`/quizzes/${quiz._id}`) } catch { return quiz }
   }
 
+  async function saveQuestion(quizId, question, questionId = null) {
+    await request(questionId ? `/quizzes/${quizId}/questions/${questionId}` : `/quizzes/${quizId}/questions`, {
+      method: questionId ? 'PUT' : 'POST', body: JSON.stringify(question),
+    })
+    await loadCatalog()
+    notify(questionId ? 'Question updated.' : 'Question created.')
+  }
+
+  async function deleteQuestion(quizId, questionId) {
+    await request(`/quizzes/${quizId}/questions/${questionId}`, { method: 'DELETE' })
+    await loadCatalog()
+    notify('Question deleted.')
+  }
+
+  async function changeUserRole(userId, role) {
+    const updated = await request(`/admin/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ role }) })
+    setAdminUsers(users => users.map(item => item._id === userId ? { ...item, ...updated } : item))
+    notify(`${updated.name}'s role updated.`)
+  }
+
   const onStart = startQuiz
   let content
 
@@ -356,15 +410,20 @@ export default function App() {
   } else if (routeName === 'leaderboard') {
     content = <LeaderboardPage categories={categories} category={leaderboardCategory} onCategoryChange={setLeaderboardCategory} entries={leaderboard} currentUser={user} isOffline={leaderboardOffline} />
   } else if (routeName === 'admin') {
-    content = user?.role === 'admin'
-      ? <AdminPage categories={categories} quizzes={quizzes} stats={adminStats} users={adminUsers} loading={loadingAdmin} onSaveQuiz={saveQuiz} onDeleteQuiz={deleteQuiz} onSaveCategory={saveCategory} onDeleteCategory={deleteCategory} onLoadQuiz={loadFullQuiz} />
-      : <main className="page-width page-main"><div className="access-denied"><AlertCircle size={22} /><h1>Admin access required</h1><p className="muted">Sign in with an administrator account to open this workspace.</p><button className="button button-primary" onClick={() => navigate('#login')}>Sign in <ArrowRightIcon /></button></div></main>
+    content = user?.role === 'admin' && adminVerified
+      ? routeId === 'questions'
+        ? <AdminQuestionsPage quizzes={quizzes} onLoadQuiz={loadFullQuiz} onSaveQuestion={saveQuestion} onDeleteQuestion={deleteQuestion} onNavigate={navigate} />
+        : <AdminPage activeSection={routeId || 'dashboard'} categories={categories} quizzes={quizzes} stats={adminStats} quizStats={adminQuizStats} users={adminUsers} loading={loadingAdmin} onSaveQuiz={saveQuiz} onDeleteQuiz={deleteQuiz} onSaveCategory={saveCategory} onDeleteCategory={deleteCategory} onLoadQuiz={loadFullQuiz} onChangeUserRole={changeUserRole} />
+      : user?.role === 'admin' && adminCheckStatus === 'checking'
+        ? <main className="page-width page-main"><LoadingState label="Verifying administrator access" /></main>
+        : <main className="page-width page-main"><div className="access-denied"><AlertCircle size={22} /><h1>Admin access required</h1><p className="muted">Sign in with an administrator account to open this workspace.</p><button className="button button-primary" onClick={() => navigate(user ? '#dashboard' : '#login')}>{user ? 'Return to dashboard' : 'Sign in'} <ArrowRightIcon /></button></div></main>
   } else {
     content = <HomePage categories={categories} quizzes={quizzes} stats={stats} user={user} onExplore={slug => navigate(slug ? `#explore/${slug}` : '#explore')} onStart={onStart} onRegister={() => navigate(user ? '#dashboard' : '#register')} onLeaderboard={() => navigate('#leaderboard')} />
   }
 
   const immersive = routeName === 'quiz' || routeName === 'login' || routeName === 'register'
-  return <div className="app-shell">{!immersive && <Navbar user={user} route={`#${routeName || 'home'}`} navigate={navigate} onLogout={signOut} />}{catalogError && routeName !== 'home' && <div className="offline-banner page-width"><AlertCircle size={15} /> {catalogError}</div>}{content}<Toast message={toastMessage} onClose={() => setToast('')} /></div>
+  const isAdmin = user?.role === 'admin' && adminVerified
+  return <div className="app-shell">{!immersive && <Navbar user={user} isAdmin={isAdmin} route={`#${routeName || 'home'}${routeId ? `/${routeId}` : ''}`} navigate={navigate} onLogout={signOut} />}{catalogError && routeName !== 'home' && <div className="offline-banner page-width"><AlertCircle size={15} /> {catalogError}</div>}{content}<Toast message={toastMessage} onClose={() => setToast('')} /></div>
 }
 
 function ArrowRightIcon() {

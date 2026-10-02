@@ -34,24 +34,36 @@ router.get('/', asyncHandler(async (req, res) => {
 router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const input = categorySchema.parse(req.body)
   const slug = input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-  const category = await Category.create({ ...input, slug })
+  const category = await Category.create({ ...input, slug, rootSlug: slug })
   res.status(201).json(category)
 }))
 
 router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const input = categorySchema.parse(req.body)
   const slug = input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-  const category = await Category.findByIdAndUpdate(req.params.id, { ...input, slug }, { new: true, runValidators: true })
+  const category = await Category.findById(req.params.id)
   if (!category) return res.status(404).json({ message: 'Category not found.' })
+  const previousSlug = category.slug
+  const isRoot = !category.parentSlug
+  Object.assign(category, input, { slug, rootSlug: isRoot ? slug : category.rootSlug })
+  await category.save()
+  if (previousSlug !== slug) {
+    await Category.updateMany({ parentSlug: previousSlug }, { $set: { parentSlug: slug } })
+    if (isRoot) await Category.updateMany({ rootSlug: previousSlug }, { $set: { rootSlug: slug } })
+  }
   res.json(category)
 }))
 
 router.delete('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const category = await Category.findById(req.params.id)
+  if (!category) return res.status(404).json({ message: 'Category not found.' })
+  if (await Category.exists({ parentSlug: category.slug })) {
+    return res.status(409).json({ message: 'Remove subcategories before deleting this subject.' })
+  }
   if (await Quiz.exists({ category: req.params.id })) {
     return res.status(409).json({ message: 'Move or delete quizzes in this category before removing it.' })
   }
-  const category = await Category.findByIdAndDelete(req.params.id)
-  if (!category) return res.status(404).json({ message: 'Category not found.' })
+  await Category.findByIdAndDelete(req.params.id)
   res.json({ message: 'Category deleted.' })
 }))
 
