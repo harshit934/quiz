@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BookOpenCheck, Menu, Shield, Trophy, UserRound, X } from 'lucide-react'
+import { BookOpenCheck, LogOut, Menu, Shield, Trophy, X } from 'lucide-react'
 
 export default function Navbar({ user, route, navigate, onLogout }) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -29,9 +29,9 @@ export default function Navbar({ user, route, navigate, onLogout }) {
             </button>
           ))}
           <div className="mobile-auth-actions">
-            {user ? <button className="button button-quiet" onClick={() => { onLogout(); setMenuOpen(false) }}>Sign out</button> : <>
-              <button className="button button-quiet" onClick={() => go('#login')}>Log in</button>
-              <button className="button button-primary" onClick={() => go('#register')}>Create account</button>
+            {user ? <button className="button button-quiet" onClick={() => { onLogout(); setMenuOpen(false) }}>Logout</button> : <>
+              <button className="button button-quiet" onClick={() => go('#login')}>Login</button>
+              <button className="button button-primary" onClick={() => go('#register')}>Register</button>
             </>}
           </div>
         </nav>
@@ -40,10 +40,10 @@ export default function Navbar({ user, route, navigate, onLogout }) {
             <button className="user-chip" onClick={() => go('#dashboard')} aria-label={`Open dashboard for ${user.name}`}>
               <span className="avatar avatar-small">{user.name?.slice(0, 1).toUpperCase()}</span><span>{user.name?.split(' ')[0]}</span>
             </button>
-            <button className="icon-button signout-button" title="Sign out" aria-label="Sign out" onClick={onLogout}><UserRound size={16} /></button>
+            <button className="button button-quiet signout-button" onClick={onLogout}><LogOut size={15} /> Logout</button>
           </> : <>
-            <button className="nav-login" onClick={() => go('#login')}>Log in</button>
-            <button className="button button-primary nav-register" onClick={() => go('#register')}>Get started</button>
+            <button className="nav-login" onClick={() => go('#login')}>Login</button>
+            <button className="button button-primary nav-register" onClick={() => go('#register')}>Register</button>
           </>}
         </div>
         <button className="menu-toggle" aria-label={menuOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={menuOpen} onClick={() => setMenuOpen(value => !value)}>
