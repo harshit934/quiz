@@ -23,9 +23,16 @@ test('every subcategory has unique Easy, Medium, and Hard quiz content', () => {
   const quizzes = flattenSubjectQuizzes()
   const questions = quizzes.flatMap(quiz => quiz.questions)
   const questionTexts = questions.map(question => question.text)
+  const levelsByCategory = new Map()
+  for (const quiz of quizzes) {
+    const levels = levelsByCategory.get(quiz.category) || new Set()
+    levels.add(quiz.difficulty)
+    levelsByCategory.set(quiz.category, levels)
+  }
 
-  assert.equal(quizzes.length, 54 * 3)
-  assert.deepEqual(['Easy', 'Medium', 'Hard'].map(level => quizzes.filter(quiz => quiz.difficulty === level).length), [54, 54, 54])
+  assert.equal(quizzes.length, 66 * 3)
+  assert.deepEqual(['Easy', 'Medium', 'Hard'].map(level => quizzes.filter(quiz => quiz.difficulty === level).length), [66, 66, 66])
+  assert.ok([...levelsByCategory.values()].every(levels => ['Easy', 'Medium', 'Hard'].every(level => levels.has(level))))
   assert.equal(new Set(questionTexts).size, questionTexts.length)
   assert.ok(questions.every(question => question.options.length === 4))
   assert.ok(questions.every(question => new Set(question.options).size === 4))
@@ -38,4 +45,7 @@ test('legacy categories remain attached to their major technology subjects', () 
   assert.equal(categories.get('javascript').parentSlug, 'programming')
   assert.equal(categories.get('react').parentSlug, 'web-development')
   assert.equal(categories.get('data-science').rootSlug, 'technology')
+  for (const slug of ['html', 'css', 'javascript', 'react-js', 'node-js', 'mongodb', 'python', 'java', 'sql', 'ai-machine-learning', 'cybersecurity', 'cloud-computing', 'git-github']) {
+    assert.equal(categories.has(slug), true, `${slug} should be discoverable in Technology`)
+  }
 })

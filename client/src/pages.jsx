@@ -87,17 +87,22 @@ export function ExplorePage({ quizzes, categories, onStart, initialCategory = 'a
   const [sort, setSort] = useState('newest')
   const [showFeatured, setShowFeatured] = useState(true)
   const categoryBySlug = new Map(categories.map(item => [item.slug, item]))
+  const matchesCategory = quiz => category === 'all'
+    || quiz.category?.slug === category
+    || quiz.category?.rootSlug === category
+    || categories.some(item => item.slug === quiz.category?.slug && item.parentSlug === category)
+  const availableDifficulties = ['Easy', 'Medium', 'Hard'].filter(level => quizzes.some(quiz => matchesCategory(quiz) && quiz.difficulty === level))
+  const selectCategory = slug => {
+    setCategory(slug)
+    setDifficulty('all')
+  }
   const hasFilters = Boolean(search.trim()) || category !== 'all' || difficulty !== 'all'
   const filtered = quizzes.filter(quiz => {
     const query = search.trim().toLowerCase()
     const categoryName = quiz.category?.name || ''
     const rootName = categoryBySlug.get(quiz.category?.rootSlug)?.name || ''
-    const matchesCategory = category === 'all'
-      || quiz.category?.slug === category
-      || quiz.category?.rootSlug === category
-      || categories.some(item => item.slug === quiz.category?.slug && item.parentSlug === category)
     return (!query || `${quiz.title} ${quiz.description} ${categoryName} ${rootName}`.toLowerCase().includes(query))
-      && matchesCategory
+      && matchesCategory(quiz)
       && (difficulty === 'all' || quiz.difficulty === difficulty)
   }).sort((a, b) => sort === 'popular'
     ? (b.attemptsCount || 0) - (a.attemptsCount || 0)
@@ -114,24 +119,24 @@ export function ExplorePage({ quizzes, categories, onStart, initialCategory = 'a
       </div>
       <div className="filter-layout">
         <aside className="filter-panel">
-          <div className="filter-section"><p className="filter-title">Subjects</p><button className={`filter-option ${category === 'all' ? 'filter-active' : ''}`} onClick={() => setCategory('all')}><span>All subjects</span><span>{quizzes.length}</span></button>
+          <div className="filter-section"><p className="filter-title">Subjects</p><button className={`filter-option ${category === 'all' ? 'filter-active' : ''}`} onClick={() => selectCategory('all')}><span>All subjects</span><span>{quizzes.length}</span></button>
             {categories.filter(item => !item.parentSlug).map(subject => {
               const children = categories.filter(item => item.parentSlug === subject.slug)
               const expanded = category === subject.slug || categories.some(item => item.rootSlug === subject.slug && (item.slug === category || item.parentSlug === category))
               return <details className="subject-filter" key={subject.slug} open={expanded}>
                 <summary className="subject-filter-summary"><span className="filter-category"><CategoryIcon name={subject.icon} size={15} style={{ color: subject.color }} /> {subject.name}</span><span>{subject.quizCount ?? 0}</span></summary>
-                <button className={`filter-option subject-filter-all ${category === subject.slug ? 'filter-active' : ''}`} onClick={() => setCategory(subject.slug)}>All {subject.name}<span>{subject.quizCount ?? 0}</span></button>
+                <button className={`filter-option subject-filter-all ${category === subject.slug ? 'filter-active' : ''}`} onClick={() => selectCategory(subject.slug)}>All {subject.name}<span>{subject.quizCount ?? 0}</span></button>
                 {children.map(child => {
                   const nested = categories.filter(item => item.parentSlug === child.slug)
                   return <div className="subject-filter-branch" key={child.slug}>
-                    <button className={`filter-option ${category === child.slug ? 'filter-active' : ''}`} onClick={() => setCategory(child.slug)}><span>{child.name}</span><span>{child.quizCount ?? 0}</span></button>
-                    {nested.map(item => <button className={`filter-option subject-filter-nested ${category === item.slug ? 'filter-active' : ''}`} key={item.slug} onClick={() => setCategory(item.slug)}><span>{item.name}</span><span>{item.quizCount ?? 0}</span></button>)}
+                    <button className={`filter-option ${category === child.slug ? 'filter-active' : ''}`} onClick={() => selectCategory(child.slug)}><span>{child.name}</span><span>{child.quizCount ?? 0}</span></button>
+                    {nested.map(item => <button className={`filter-option subject-filter-nested ${category === item.slug ? 'filter-active' : ''}`} key={item.slug} onClick={() => selectCategory(item.slug)}><span>{item.name}</span><span>{item.quizCount ?? 0}</span></button>)}
                   </div>
                 })}
               </details>
             })}
           </div>
-          <div className="filter-section"><p className="filter-title">Difficulty</p><div className="difficulty-filter">{['all', 'Easy', 'Medium', 'Hard'].map(item => <button key={item} className={`difficulty-pill ${difficulty === item ? 'difficulty-active' : ''}`} onClick={() => setDifficulty(item)}>{item === 'all' ? 'Any level' : item}</button>)}</div></div>
+          <div className="filter-section"><p className="filter-title">Difficulty</p><div className="difficulty-filter">{['all', ...availableDifficulties].map(item => <button key={item} className={`difficulty-pill ${difficulty === item ? 'difficulty-active' : ''}`} onClick={() => setDifficulty(item)}>{item === 'all' ? 'Any level' : item}</button>)}</div></div>
         </aside>
         <div className="explore-results">
           {showFeaturedSection && <div className="results-group"><div className="results-group-heading"><div><p className="eyebrow">Editor’s selection</p><h2>Featured</h2></div><button className="text-button" onClick={() => setShowFeatured(!showFeatured)}>{showFeatured ? 'Hide featured' : 'Show featured'}</button></div>{showFeatured && <div className="quiz-grid">{featured.map(quiz => <QuizCard key={quiz._id} quiz={quiz} onStart={onStart} />)}</div>}</div>}
