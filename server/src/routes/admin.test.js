@@ -17,6 +17,7 @@ test('JWT login roles control access to admin APIs', async () => {
   const originals = {
     findOne: User.findOne,
     findById: User.findById,
+    findUsers: User.find,
     userCount: User.countDocuments,
     quizCount: Quiz.countDocuments,
     quizFind: Quiz.find,
@@ -28,8 +29,16 @@ test('JWT login roles control access to admin APIs', async () => {
   const secret = 'test-only-jwt-secret'
   process.env.JWT_SECRET = secret
   const identities = {
-    'learner@example.test': { id: '507f1f77bcf86cd799439011', name: 'Learner', email: 'learner@example.test', role: 'user' },
+    'learner@example.test': { id: '507f1f77bcf86cd799439011', name: 'Learner', username: 'fixture_learner', email: 'learner@example.test', role: 'user' },
     'admin@example.test': { id: '507f1f77bcf86cd799439012', name: 'Admin', email: 'admin@example.test', username: 'fixture_admin', role: 'admin' },
+  }
+  const lastActivity = new Date('2026-10-01T12:34:56.000Z')
+  const recentAttempt = {
+    user: { name: 'Learner', username: 'fixture_learner', email: 'learner@example.test' },
+    quiz: { title: 'Science basics', category: { name: 'Science' } },
+    score: 3,
+    percentage: 75,
+    createdAt: lastActivity,
   }
   User.findOne = query => ({ select: async () => {
     const identity = query.email
@@ -42,17 +51,33 @@ test('JWT login roles control access to admin APIs', async () => {
     const user = identity && { ...identity, _id: identity.id, save: async () => {} }
     return Object.assign(Promise.resolve(user), { select: async () => user })
   }
+  User.find = () => ({
+    select() { return this },
+    sort() { return this },
+    limit() { return this },
+    lean: async () => [{
+      _id: identities['learner@example.test'].id,
+      ...identities['learner@example.test'],
+      createdAt: new Date('2026-09-01T08:00:00.000Z'),
+      password: 'must-not-leak',
+      passwordHash: 'must-not-leak',
+    }],
+  })
   User.countDocuments = async () => 2
   Quiz.countDocuments = async () => 3
   Question.countDocuments = async () => 4
   Attempt.countDocuments = async () => 5
   Quiz.find = () => ({ select() { return this }, populate() { return this }, sort() { return this }, lean: async () => [] })
-  Attempt.aggregate = async pipeline => pipeline[0]?.$match ? [] : [{ _id: null, average: 75 }]
+  Attempt.aggregate = async pipeline => {
+    if (pipeline[0]?.$match) return [{ _id: identities['learner@example.test'].id, attempts: 3, averageScore: 82, lastActivity }]
+    if (pipeline[0]?.$group?._id === '$quiz') return []
+    return [{ _id: null, average: 75 }]
+  }
   Attempt.find = () => ({
     sort() { return this },
     limit() { return this },
     populate() { return this },
-    lean: async () => [],
+    lean: async () => [recentAttempt],
   })
 
   const app = express()
@@ -87,8 +112,12 @@ test('JWT login roles control access to admin APIs', async () => {
 
     const unauthenticated = await fetch(`${baseUrl}/admin/stats`)
     assert.equal(unauthenticated.status, 401)
+    const unauthenticatedUsers = await fetch(`${baseUrl}/admin/users`)
+    assert.equal(unauthenticatedUsers.status, 401)
     const learnerResponse = await fetch(`${baseUrl}/admin/stats`, { headers: { authorization: `Bearer ${learnerData.token}` } })
     assert.equal(learnerResponse.status, 403)
+    const learnerUsers = await fetch(`${baseUrl}/admin/users`, { headers: { authorization: `Bearer ${learnerData.token}` } })
+    assert.equal(learnerUsers.status, 403)
     const learnerQuizStats = await fetch(`${baseUrl}/admin/stats/quizzes`, { headers: { authorization: `Bearer ${learnerData.token}` } })
     assert.equal(learnerQuizStats.status, 403)
     const learnerCategoryCreate = await fetch(`${baseUrl}/categories`, {
@@ -110,14 +139,40 @@ test('JWT login roles control access to admin APIs', async () => {
     assert.equal(learnerQuestionDelete.status, 403)
     const adminResponse = await fetch(`${baseUrl}/admin/stats`, { headers: { authorization: `Bearer ${adminData.token}` } })
     assert.equal(adminResponse.status, 200)
-    assert.deepEqual(await adminResponse.json(), {
+    const adminStats = await adminResponse.json()
+    assert.deepEqual(adminStats, {
       users: 2,
       quizzes: 3,
       questions: 4,
       attempts: 5,
       averageScore: 75,
-      recentAttempts: [],
+      recentAttempts: [{
+        user: 'Learner',
+        username: 'fixture_learner',
+        email: 'learner@example.test',
+        quiz: 'Science basics',
+        category: 'Science',
+        score: 3,
+        percentage: 75,
+        createdAt: lastActivity.toISOString(),
+      }],
     })
+    assert.doesNotMatch(JSON.stringify(adminStats), /password|passwordHash|JWT_SECRET|secret/i)
+    const adminUsersResponse = await fetch(`${baseUrl}/admin/users`, { headers: { authorization: `Bearer ${adminData.token}` } })
+    assert.equal(adminUsersResponse.status, 200)
+    const adminUsers = await adminUsersResponse.json()
+    assert.deepEqual(adminUsers, [{
+      _id: identities['learner@example.test'].id,
+      name: 'Learner',
+      username: 'fixture_learner',
+      email: 'learner@example.test',
+      role: 'user',
+      createdAt: '2026-09-01T08:00:00.000Z',
+      attempts: 3,
+      averageScore: 82,
+      lastActivity: lastActivity.toISOString(),
+    }])
+    assert.doesNotMatch(JSON.stringify(adminUsers), /password|passwordHash|JWT_SECRET|secret/i)
     const adminQuizStats = await fetch(`${baseUrl}/admin/stats/quizzes`, { headers: { authorization: `Bearer ${adminData.token}` } })
     assert.equal(adminQuizStats.status, 200)
     assert.deepEqual(await adminQuizStats.json(), [])
@@ -138,6 +193,7 @@ test('JWT login roles control access to admin APIs', async () => {
     await new Promise(resolve => server.close(resolve))
     User.findOne = originals.findOne
     User.findById = originals.findById
+    User.find = originals.findUsers
     User.countDocuments = originals.userCount
     Quiz.countDocuments = originals.quizCount
     Quiz.find = originals.quizFind

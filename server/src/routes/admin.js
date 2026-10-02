@@ -20,7 +20,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
     Attempt.countDocuments(),
     Attempt.aggregate([{ $group: { _id: null, average: { $avg: '$percentage' } } }]),
     Attempt.find().sort({ createdAt: -1 }).limit(8)
-      .populate('user', 'name')
+      .populate('user', 'name username email')
       .populate({ path: 'quiz', select: 'title category', populate: { path: 'category', select: 'name' } })
       .lean(),
   ])
@@ -32,6 +32,8 @@ router.get('/stats', asyncHandler(async (req, res) => {
     averageScore: Math.round(performance[0]?.average || 0),
     recentAttempts: recentAttempts.filter(item => item.user && item.quiz).map(item => ({
       user: item.user.name,
+      username: item.user.username || '',
+      email: item.user.email,
       quiz: item.quiz.title,
       category: item.quiz.category?.name,
       score: item.score,
@@ -46,9 +48,10 @@ router.get('/users', asyncHandler(async (req, res) => {
   const safeSearch = escapeRegex(search)
   const filter = search ? { $or: [
     { name: { $regex: safeSearch, $options: 'i' } },
+    { username: { $regex: safeSearch, $options: 'i' } },
     { email: { $regex: safeSearch, $options: 'i' } },
   ] } : {}
-  const users = await User.find(filter).select('name email role createdAt').sort({ createdAt: -1 }).limit(100).lean()
+  const users = await User.find(filter).select('name username email role createdAt').sort({ createdAt: -1 }).limit(100).lean()
   const userIds = users.map(user => user._id)
   const performance = await Attempt.aggregate([
     { $match: { user: { $in: userIds } } },
@@ -57,7 +60,17 @@ router.get('/users', asyncHandler(async (req, res) => {
   const performanceByUser = new Map(performance.map(item => [String(item._id), item]))
   res.json(users.map(user => {
     const stats = performanceByUser.get(String(user._id))
-    return { ...user, attempts: stats?.attempts || 0, averageScore: Math.round(stats?.averageScore || 0) }
+    return {
+      _id: user._id,
+      name: user.name,
+      username: user.username || '',
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt,
+      attempts: stats?.attempts || 0,
+      averageScore: Math.round(stats?.averageScore || 0),
+      lastActivity: stats?.lastActivity || null,
+    }
   }))
 }))
 
