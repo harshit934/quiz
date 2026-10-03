@@ -2,6 +2,7 @@ import dotenv from 'dotenv'
 import mongoose from 'mongoose'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { shouldSeedStarterContent } from './migrationMode.js'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../')
 dotenv.config({ path: path.join(projectRoot, '.env') })
@@ -26,13 +27,15 @@ async function start() {
 
   const server = app.listen(port, '0.0.0.0', () => console.info(`Quiz API listening on port ${port}`))
 
-  if (mongoose.connection.readyState === 1) {
+  if (mongoose.connection.readyState === 1 && shouldSeedStarterContent()) {
     try {
       await seedStarterContent()
       console.info('Starter content seeding complete.')
     } catch (error) {
       console.error('MongoDB seeding failed:', error.message)
     }
+  } else if (mongoose.connection.readyState === 1) {
+    console.info('Starter content seeding skipped in explicit quiz question migration mode.')
   }
 
   return server

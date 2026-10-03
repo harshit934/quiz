@@ -1,0 +1,75 @@
+{
+  "formatVersion": 1,
+  "batchId": "reviewed-question-shortfalls-2026-10-03",
+  "quizzes": [
+    {
+      "categorySlug": "javascript",
+      "title": "JavaScript Basics",
+      "difficulty": "Easy",
+      "questions": [
+        {
+          "text": "Which method converts a JSON string into a JavaScript value?",
+          "options": ["JSON.parse()", "JSON.stringify()", "JSON.toObject()", "JSON.read()"],
+          "correctAnswer": 0,
+          "explanation": "JSON.parse() reads JSON text and returns the corresponding JavaScript value."
+        },
+        {
+          "text": "What does Array.isArray([1, 2, 3]) return?",
+          "options": ["true", "false", "3", "undefined"],
+          "correctAnswer": 0,
+          "explanation": "Array.isArray() returns true when its argument is an array."
+        }
+      ]
+    },
+    {
+      "categorySlug": "node-js",
+      "title": "Node.js Fundamentals",
+      "difficulty": "Medium",
+      "questions": [
+        {
+          "text": "Which built-in Node.js module provides the createServer() function used to make a basic HTTP server?",
+          "options": ["http", "path", "events", "crypto"],
+          "correctAnswer": 0,
+          "explanation": "The built-in http module provides createServer() for creating HTTP servers."
+        },
+        {
+          "text": "What does the fs.promises API generally return for an asynchronous file operation?",
+          "options": ["A Promise", "A worker thread", "A synchronous file descriptor only", "An EventEmitter for every operation"],
+          "correctAnswer": 0,
+          "explanation": "The fs.promises API exposes promise-based file-system operations that can be awaited."
+        },
+        {
+          "text": "In a CommonJS module, what does module.exports determine?",
+          "options": ["The value made available to modules that require() this module", "The Node.js version used by the process", "The package manager's lockfile format", "The environment variables inherited by child processes"],
+          "correctAnswer": 0,
+          "explanation": "module.exports defines the exported value returned by require() for that module."
+        }
+      ]
+    },
+    {
+      "categorySlug": "mongodb",
+      "title": "Advanced MongoDB",
+      "difficulty": "Hard",
+      "questions": [
+        {
+          "text": "Given a compound index on { tenantId: 1, createdAt: -1, status: 1 }, which query can use the index prefix without constraining createdAt or status?",
+          "options": ["A query filtering on tenantId", "A query filtering only on status", "A query filtering only on createdAt", "A query filtering on status and createdAt but not tenantId"],
+          "correctAnswer": 0,
+          "explanation": "Compound indexes support leading prefixes, so tenantId alone can use the first index field."
+        },
+        {
+          "text": "In a sharded MongoDB cluster, what is a primary purpose of choosing a shard key with high cardinality and even value distribution?",
+          "options": ["To help distribute data and write load across shards", "To guarantee every query is a scatter-gather", "To remove the need for indexes", "To make every document reside on every shard"],
+          "correctAnswer": 0,
+          "explanation": "A well-distributed shard key helps avoid hotspots by spreading data and workload across shards."
+        },
+        {
+          "text": "What does a $lookup stage with a pipeline and let variables enable that a simple localField/foreignField lookup does not express as directly?",
+          "options": ["Correlated joins with pipeline conditions on the foreign collection", "Automatic schema validation on both collections", "A transaction spanning unrelated clusters", "A unique constraint across both collections"],
+          "correctAnswer": 0,
+          "explanation": "A pipeline-based $lookup can use let variables and $expr to apply correlated conditions to foreign documents."
+        }
+      ]
+    }
+  ]
+}
