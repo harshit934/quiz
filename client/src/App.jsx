@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, BookOpenCheck, LoaderCircle } from 'lucide-react'
 import Navbar from './components/Navbar.jsx'
 import AdminQuestionsPage from './AdminQuestionsPage.jsx'
+import AdminExamsPage from './AdminExamsPage.jsx'
+import ExamsPage from './ExamsPage.jsx'
 import { LoadingState, Toast } from './components/ui.jsx'
 import { demoCategories, demoQuizzes } from './data/demoData.js'
 import { fisherYates } from './utils/shuffle.js'
@@ -89,7 +91,8 @@ export default function App() {
   const [catalogError, setCatalogError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const [routeName, routeId] = route.slice(1).split('/')
+  const routeParts = route.slice(1).split('/')
+  const [routeName, routeId] = routeParts
   const navigate = useCallback(target => {
     if (window.location.hash !== target) window.location.hash = target
     else setRoute(target)
@@ -409,9 +412,13 @@ export default function App() {
     content = user ? <DashboardPage user={user} data={dashboard || localDashboard(user)} loading={loadingDashboard} onOpenAttempt={openAttempt} onExplore={() => navigate('#explore')} /> : <AuthPage mode="login" onModeChange={navigate} onSubmit={values => submitAuth(values, 'login')} onContinueDemo={continueDemo} />
   } else if (routeName === 'leaderboard') {
     content = <LeaderboardPage categories={categories} category={leaderboardCategory} onCategoryChange={setLeaderboardCategory} entries={leaderboard} currentUser={user} isOffline={leaderboardOffline} />
+  } else if (routeName === 'exams') {
+    content = <ExamsPage route={routeParts.slice(1)} user={user} navigate={navigate} />
   } else if (routeName === 'admin') {
     content = user?.role === 'admin' && adminVerified
-      ? routeId === 'questions'
+      ? routeId === 'exams'
+        ? <AdminExamsPage route={routeParts.slice(2)} navigate={navigate} />
+        : routeId === 'questions'
         ? <AdminQuestionsPage quizzes={quizzes} onLoadQuiz={loadFullQuiz} onSaveQuestion={saveQuestion} onDeleteQuestion={deleteQuestion} onNavigate={navigate} />
         : <AdminPage activeSection={routeId || 'dashboard'} categories={categories} quizzes={quizzes} stats={adminStats} quizStats={adminQuizStats} users={adminUsers} loading={loadingAdmin} onSaveQuiz={saveQuiz} onDeleteQuiz={deleteQuiz} onSaveCategory={saveCategory} onDeleteCategory={deleteCategory} onLoadQuiz={loadFullQuiz} onChangeUserRole={changeUserRole} />
       : user?.role === 'admin' && adminCheckStatus === 'checking'

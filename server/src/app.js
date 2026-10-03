@@ -8,6 +8,7 @@ import userRoutes from './routes/users.js'
 import quizRoutes from './routes/quizzes.js'
 import categoryRoutes from './routes/categories.js'
 import attemptRoutes from './routes/attempts.js'
+import examRoutes from './routes/exams.js'
 import leaderboardRoutes from './routes/leaderboard.js'
 import adminRoutes from './routes/admin.js'
 import User from './models/User.js'
@@ -49,6 +50,7 @@ app.use('/api/users', userRoutes)
 app.use('/api/quizzes', quizRoutes)
 app.use('/api/categories', categoryRoutes)
 app.use('/api/attempts', attemptRoutes)
+app.use('/api/exams', examRoutes)
 app.use('/api/leaderboard', leaderboardRoutes)
 app.use('/api/admin', adminRoutes)
 app.use(notFound)

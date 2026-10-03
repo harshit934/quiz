@@ -5,6 +5,7 @@ export default function Navbar({ user, isAdmin, route, navigate, onLogout }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const links = isAdmin ? [
     { label: 'Admin Dashboard', route: '#admin/dashboard', icon: Shield },
+    { label: 'Exams', route: '#admin/exams', icon: BookOpenCheck },
     { label: 'Manage Subjects', route: '#admin/subjects' },
     { label: 'Manage Quizzes', route: '#admin/quizzes' },
     { label: 'Manage Questions', route: '#admin/questions' },
@@ -13,6 +14,7 @@ export default function Navbar({ user, isAdmin, route, navigate, onLogout }) {
   ] : [
     { label: 'Home', route: '#home' },
     { label: 'Explore', route: '#explore' },
+    { label: 'Exams', route: '#exams', icon: BookOpenCheck },
     ...(user ? [{ label: 'Dashboard', route: '#dashboard' }] : []),
     { label: 'Leaderboard', route: '#leaderboard', icon: Trophy },
   ]
@@ -30,7 +32,7 @@ export default function Navbar({ user, isAdmin, route, navigate, onLogout }) {
         </button>
         <nav className={`main-nav ${isAdmin ? 'admin-main-nav' : ''} ${menuOpen ? 'nav-open' : ''}`} aria-label="Main navigation">
           {links.map(({ label, route: target, icon: Icon }) => (
-            <button className={`nav-link ${route === target || (target === '#admin/dashboard' && route === '#admin') ? 'nav-link-active' : ''}`} key={target} onClick={() => go(target)}>
+            <button className={`nav-link ${route === target || (target === '#admin/dashboard' && route === '#admin') || (target === '#admin/exams' && route.startsWith('#admin/exams')) || (target === '#exams' && route.startsWith('#exams')) ? 'nav-link-active' : ''}`} key={target} onClick={() => go(target)}>
               {Icon && <Icon size={15} />} {label}
             </button>
           ))}
