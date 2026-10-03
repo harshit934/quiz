@@ -4,7 +4,7 @@
   "quizzes": [
     {
       "categorySlug": "javascript",
-      "title": "JavaScript Basics",
+      "title": "JavaScript: Easy practice",
       "difficulty": "Easy",
       "questions": [
         {
@@ -23,7 +23,7 @@
     },
     {
       "categorySlug": "node-js",
-      "title": "Node.js Fundamentals",
+      "title": "Node.js: Medium practice",
       "difficulty": "Medium",
       "questions": [
         {
@@ -48,7 +48,7 @@
     },
     {
       "categorySlug": "mongodb",
-      "title": "Advanced MongoDB",
+      "title": "MongoDB: Hard practice",
       "difficulty": "Hard",
       "questions": [
         {
