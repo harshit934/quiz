@@ -18,6 +18,18 @@
           "options": ["true", "false", "3", "undefined"],
           "correctAnswer": 0,
           "explanation": "Array.isArray() returns true when its argument is an array."
+        },
+        {
+          "text": "Which keyword declares a block-scoped variable that can be reassigned?",
+          "options": ["let", "const", "static", "export"],
+          "correctAnswer": 0,
+          "explanation": "let declares a block-scoped variable whose value can be reassigned."
+        },
+        {
+          "text": "What value does the expression 5 === '5' produce?",
+          "options": ["false", "true", "5", "It throws a TypeError"],
+          "correctAnswer": 0,
+          "explanation": "Strict equality does not coerce values, and a number is not equal to a string."
         }
       ]
     },
@@ -43,6 +55,42 @@
           "options": ["The value made available to modules that require() this module", "The Node.js version used by the process", "The package manager's lockfile format", "The environment variables inherited by child processes"],
           "correctAnswer": 0,
           "explanation": "module.exports defines the exported value returned by require() for that module."
+        },
+        {
+          "text": "Which method registers a listener for an event emitted by a Node.js EventEmitter?",
+          "options": ["on()", "listenOnce()", "addRoute()", "watchFile()"],
+          "correctAnswer": 0,
+          "explanation": "EventEmitter.on() registers a listener that runs when the named event is emitted."
+        },
+        {
+          "text": "What does path.join() do when given multiple path segments?",
+          "options": ["Combines them into a normalized path", "Reads the file at the resulting path", "Changes the process working directory", "Converts the path to a URL"],
+          "correctAnswer": 0,
+          "explanation": "path.join() joins path segments and normalizes the resulting path."
+        },
+        {
+          "text": "How can a Node.js program read an environment variable named PORT?",
+          "options": ["process.env.PORT", "process.config.PORT", "node.env.PORT", "module.env.PORT"],
+          "correctAnswer": 0,
+          "explanation": "Node.js exposes environment variables through the process.env object."
+        },
+        {
+          "text": "What does setImmediate() schedule in Node.js?",
+          "options": ["A callback to run in the check phase after I/O callbacks", "A callback to run before the current JavaScript stack finishes", "A callback to run only after a one-second delay", "A new operating-system process"],
+          "correctAnswer": 0,
+          "explanation": "setImmediate() schedules its callback for the event loop's check phase."
+        },
+        {
+          "text": "Which Buffer method creates a Buffer from a string using a specified encoding?",
+          "options": ["Buffer.from()", "Buffer.allocUnsafeString()", "Buffer.read()", "Buffer.encode()"],
+          "correctAnswer": 0,
+          "explanation": "Buffer.from(string, encoding) creates a Buffer containing the encoded string data."
+        },
+        {
+          "text": "In a CommonJS module, what does require.resolve() return?",
+          "options": ["The resolved filename for a module without loading its exports", "The module's exported object", "The package version from the lockfile", "A Promise for the module contents"],
+          "correctAnswer": 0,
+          "explanation": "require.resolve() resolves a module specifier to its filename without loading the module."
         }
       ]
     },
@@ -68,6 +116,72 @@
           "options": ["Correlated joins with pipeline conditions on the foreign collection", "Automatic schema validation on both collections", "A transaction spanning unrelated clusters", "A unique constraint across both collections"],
           "correctAnswer": 0,
           "explanation": "A pipeline-based $lookup can use let variables and $expr to apply correlated conditions to foreign documents."
+        },
+        {
+          "text": "What does the majority write concern require for an acknowledged write?",
+          "options": ["Acknowledgment after the write is committed by a majority of voting data-bearing members", "Acknowledgment from every client connected to the cluster", "Replication to every shard regardless of the write target", "A successful read from every secondary before the write begins"],
+          "correctAnswer": 0,
+          "explanation": "Majority write concern waits for acknowledgment that the write has been committed by a majority of voting data-bearing replica-set members."
+        },
+        {
+          "text": "Which transaction property ensures that a transaction's changes are applied as one indivisible unit?",
+          "options": ["Atomicity", "Eventual consistency", "Sharding", "Document validation"],
+          "correctAnswer": 0,
+          "explanation": "Atomicity means a transaction's operations succeed together or are rolled back together."
+        },
+        {
+          "text": "What does the executionStats mode of explain() provide?",
+          "options": ["Execution details and statistics for the query plan", "A permanent index on every queried field", "A snapshot of all documents in the collection", "A guarantee that future runs use the same plan"],
+          "correctAnswer": 0,
+          "explanation": "The executionStats verbosity executes the winning plan and reports execution details such as examined keys and documents."
+        },
+        {
+          "text": "What is a key property of a partial index?",
+          "options": ["It indexes only documents that satisfy its filter expression", "It stores only the first field of every document", "It automatically expires documents after a fixed interval", "It can be used only by aggregation pipelines"],
+          "correctAnswer": 0,
+          "explanation": "A partial index contains entries only for documents matching its specified filter expression."
+        },
+        {
+          "text": "How does a TTL index affect documents whose indexed date has expired?",
+          "options": ["MongoDB removes them asynchronously in the background", "MongoDB immediately archives them to another collection", "MongoDB rejects reads that match them", "MongoDB converts them to capped collection records"],
+          "correctAnswer": 0,
+          "explanation": "The TTL monitor removes expired documents asynchronously rather than at an exact deadline."
+        },
+        {
+          "text": "In an update with upsert enabled, when does $setOnInsert apply?",
+          "options": ["Only when the operation inserts a new document", "For every matched document before $set runs", "Only when the update matches multiple documents", "Only after the document is deleted"],
+          "correctAnswer": 0,
+          "explanation": "$setOnInsert assigns fields only when an upsert creates a new document."
+        },
+        {
+          "text": "What must a client do to consume MongoDB change stream events?",
+          "options": ["Open a change stream on a supported replica set or sharded cluster", "Enable capped collections on every database", "Create a TTL index on the event timestamp", "Run the server with standalone storage only"],
+          "correctAnswer": 0,
+          "explanation": "Change streams are available on replica sets and sharded clusters and provide a cursor for event consumption."
+        },
+        {
+          "text": "What does the $merge aggregation stage do with pipeline results?",
+          "options": ["Writes the results into a specified collection", "Combines two replica sets into one", "Creates a compound index from each result", "Streams results directly to every connected client"],
+          "correctAnswer": 0,
+          "explanation": "$merge writes aggregation output documents into a target collection."
+        },
+        {
+          "text": "When does a multikey index become useful?",
+          "options": ["When indexing a field whose value is an array", "When encrypting a field with multiple keys", "When a query reads from multiple replica-set members", "When a collection contains multiple databases"],
+          "correctAnswer": 0,
+          "explanation": "MongoDB creates a multikey index when an indexed field contains array values."
+        },
+        {
+          "text": "What is the purpose of a shard zone in a sharded cluster?",
+          "options": ["To associate key ranges with selected shards", "To encrypt documents according to their shard key", "To ensure every query is routed to all shards", "To reserve an index namespace for one database"],
+          "correctAnswer": 0,
+          "explanation": "Zones associate shard-key ranges with designated shards to support data placement policies."
+        },
+        {
+          "text": "What does readConcern: 'snapshot' provide for reads inside a transaction?",
+          "options": ["A consistent snapshot of data at a single point in time", "The newest value independently from each replica-set member", "A lock that prevents all other writes until the transaction ends", "A permanent snapshot collection created for the transaction"],
+          "correctAnswer": 0,
+          "explanation": "Snapshot read concern provides a consistent view of data at a single point in time for the transaction."
         }
       ]
     }
