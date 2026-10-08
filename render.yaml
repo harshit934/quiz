@@ -7,6 +7,8 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://quiz-1-f2c7.onrender.com
+      - key: VITE_GOOGLE_CLIENT_ID
+        sync: false
     routes:
       - type: rewrite
         source: /*
