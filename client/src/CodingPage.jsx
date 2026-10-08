@@ -6,6 +6,7 @@ import { subjectLanguages } from '../../shared/nativeCodingChallenges.js'
 import { generateCodingChallenge, nextCodingAttempt } from '../../shared/generateCodingChallenge.js'
 import { codingScore, readCodingProgress, writeCodingProgress, readCodingDraft } from './utils/codingProgress.js'
 import './coding.css'
+import { codingMinutes, timedChallenge, remainingSeconds, clockLabel } from './utils/codingTimer.js'
 
 const subjects = codingChallenges.filter(item => item.difficulty === 'Easy')
 const display = value => JSON.stringify(value, null, 2)
@@ -25,7 +26,7 @@ export default function CodingPage({ user, onPlayground }) {
     })
   }
   function openQuestion(level) {
-    const next = generateCodingChallenge(subject, level, nextCodingAttempt(window.localStorage))
+    const next = timedChallenge(generateCodingChallenge(subject, level, nextCodingAttempt(window.localStorage)))
     setChallenge(next)
     updateProgress({ subjectId: subject, difficulty: level, status: 'In progress', passed: 0, total: next.testCases.length, score: 0 })
   }
@@ -53,11 +54,15 @@ export default function CodingPage({ user, onPlayground }) {
         <td><button className="coding-open" onClick={() => openQuestion(item.difficulty)} aria-label={`Start ${item.difficulty} ${item.subject} coding challenge`}><ArrowRight size={20} /></button></td>
       </tr>
     })}</tbody></table></div>
-    <p className="coding-local-note">Practice scores stay in this browser. Opening a question starts a new attempt.</p>
+    <p className="coding-local-note">Easy: 15 minutes · Medium: 30 minutes · Hard: 45 minutes. The timer starts when you open a question. Practice scores stay in this browser.</p>
   </main>
 }
 
 function CodingExercise({ challenge, onNewAttempt, onBack, onProgress, storageKey }) {
+  const [deadline] = useState(() => timedChallenge(challenge).deadline)
+  const [seconds, setSeconds] = useState(() => remainingSeconds(deadline))
+  const expired = seconds === 0
+  const expiryHandled = useRef(false)
   const [code, setCode] = useState(challenge.draft ?? challenge.starter)
   const [results, setResults] = useState(null)
   const [preview, setPreview] = useState('')
@@ -69,6 +74,18 @@ function CodingExercise({ challenge, onNewAttempt, onBack, onProgress, storageKe
   const [maximized, setMaximized] = useState(false)
   const [savedNotice, setSavedNotice] = useState('')
   const active = useRef(true), gutter = useRef(null), editor = useRef(null)
+  useEffect(() => {
+    const tick = () => setSeconds(remainingSeconds(deadline))
+    const interval = setInterval(tick, 1000)
+    window.addEventListener('focus', tick)
+    return () => { clearInterval(interval); window.removeEventListener('focus', tick) }
+  }, [deadline])
+  useEffect(() => {
+    if (!expired || expiryHandled.current) return
+    expiryHandled.current = true
+    saveCode()
+    report({ status: 'Time expired', passed: results?.filter(item => item.passed).length || 0, tested: !!results, score: codingScore(results?.filter(item => item.passed).length || 0, challenge.testCases.length, challenge.difficulty) })
+  }, [expired])
   useEffect(() => { active.current = true; return () => { active.current = false } }, [])
   const passed = results?.filter(item => item.passed).length || 0
   function report(next) { onProgress({ subjectId: challenge.subjectId, difficulty: challenge.difficulty, total: challenge.testCases.length, ...next }) }
@@ -77,40 +94,40 @@ function CodingExercise({ challenge, onNewAttempt, onBack, onProgress, storageKe
     report({ status: 'In progress', passed: 0, score: 0, tested: false })
   }
   function saveCode() {
-    try { window.localStorage.setItem(`${storageKey}-saved-code`, JSON.stringify({ challenge, code })); setSavedNotice('Code saved in this browser.') }
+    try { window.localStorage.setItem(`${storageKey}-saved-code`, JSON.stringify({ challenge: { ...challenge, deadline }, code })); setSavedNotice('Code saved in this browser.') }
     catch { setSavedNotice('Storage unavailable. Copy your code to keep it.') }
   }
   async function run() {
-    if (running) return
+    if (running || remainingSeconds(deadline) === 0) return
     setRunning(true); setError(''); setResults(null)
     try {
       const output = await runSubjectChallenge(challenge, code, value => { if (active.current) setPhase(value) })
       const next = output.results
-      if (active.current) {
+      if (active.current && remainingSeconds(deadline) > 0) {
         setResults(next); setPreview(output.preview || '')
         const count = next.filter(item => item.passed).length
         report({ status: count === next.length ? 'Completed' : 'In progress', passed: count, tested: true, score: codingScore(count, next.length, challenge.difficulty) })
       }
     } catch (failure) {
-      if (active.current) { setError(failure.message); report({ status: 'In progress', passed: 0, score: 0, tested: true }) }
+      if (active.current && remainingSeconds(deadline) > 0) { setError(failure.message); report({ status: 'In progress', passed: 0, score: 0, tested: true }) }
     } finally { if (active.current) setRunning(false) }
   }
   return <main className={`coding-workspace ${maximized ? 'coding-workspace-maximized' : ''}`}>
-    <div className="coding-workspace-heading"><button className="coding-back" onClick={onBack} disabled={running}><ArrowLeft size={20} /> Coding Practice</button><button className="button button-quiet" onClick={onNewAttempt} disabled={running}>New attempt <ArrowRight size={15} /></button></div>
-    <div className="coding-workspace-grid">
+    <div className="coding-workspace-heading"><button className="coding-back" onClick={onBack} disabled={running}><ArrowLeft size={20} /> Coding Practice</button><div className="coding-exam-clock" role="timer" aria-label="Time remaining"><strong>{clockLabel(seconds)}</strong><span>{expired ? 'Time expired' : `${codingMinutes[challenge.difficulty]} minute attempt`}</span></div><button className="button button-quiet" onClick={onNewAttempt} disabled={running}>New attempt <ArrowRight size={15} /></button></div>
+    <>{expired && <p className="coding-time-expired" role="alert">Time is up. Your code has been saved. Start a new attempt to try again.</p>}</><div className="coding-workspace-grid">
       <section className="coding-description-panel">
         <div className="coding-description-tabs" role="tablist" aria-label="Challenge information"><button id="description-tab" role="tab" aria-selected={tab === 'description'} aria-controls="coding-info" onClick={() => setTab('description')}><FileText size={18} /> Description</button><button id="help-tab" role="tab" aria-selected={tab === 'help'} aria-controls="coding-info" onClick={() => setTab('help')}><HelpCircle size={18} /> Get Help</button></div>
         <div className="coding-description-content" id="coding-info" role="tabpanel" aria-labelledby={tab === 'description' ? 'description-tab' : 'help-tab'}>
-          <div className="coding-title-row"><h1>{challenge.title}</h1><span className={`coding-status coding-status-${results && passed === results.length ? 'complete' : 'progress'}`}><i />{results && passed === results.length ? 'Completed' : 'In progress'}</span></div>
+          <div className="coding-title-row"><h1>{challenge.title}</h1><span className={`coding-status coding-status-${results && passed === results.length ? 'complete' : 'progress'}`}><i />{expired ? 'Time expired' : results && passed === results.length ? 'Completed' : 'In progress'}</span></div>
           <span className={`coding-level coding-level-${challenge.difficulty.toLowerCase()}`}>{challenge.difficulty}</span>
           {tab === 'description' ? <><p className="coding-task-description">{challenge.description}</p><h2>Your task</h2><p>{challenge.instructions}</p><h2>Sample test cases</h2><TestCases challenge={challenge} results={results} /></> : <><h2>How to solve this challenge</h2><ol className="coding-help-list"><li>Read the requirements for this attempt.</li><li>Inspect each input and expected output.</li><li>{challenge.instructions}</li><li>Run test cases and revise any failing output.</li></ol><p>Use Tab to indent and Ctrl+Enter to run. Code execution stops after three seconds, after the language runtime loads.</p><button className="button button-quiet" onClick={() => setShowSolution(value => !value)}>{showSolution ? 'Hide' : 'Show'} reference solution</button>{showSolution && <pre className="coding-reference">{challenge.solution}</pre>}</>}
         </div>
         <div className="coding-description-footer"><Code2 size={17} />{challenge.subject}<span>Practice · {limits[challenge.difficulty]} points</span></div>
       </section>
       <section className="coding-editor-panel" aria-label="Coding workspace">
-        <div className="coding-editor-toolbar"><span>Code editor</span><div><button className="icon-button" aria-label="Save code" title="Save code" onClick={saveCode}><Save size={18} /></button><button className="icon-button" aria-label="Reset code" title="Reset code" disabled={running} onClick={() => changeCode(challenge.starter)}><RotateCcw size={18} /></button><button className="icon-button" aria-label={maximized ? 'Restore editor' : 'Maximize editor'} title={maximized ? 'Restore editor' : 'Maximize editor'} onClick={() => setMaximized(value => !value)}>{maximized ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button></div></div>
+        <div className="coding-editor-toolbar"><span>Code editor</span><div><button className="icon-button" aria-label="Save code" title="Save code" onClick={saveCode}><Save size={18} /></button><button className="icon-button" aria-label="Reset code" title="Reset code" disabled={running || expired} onClick={() => changeCode(challenge.starter)}><RotateCcw size={18} /></button><button className="icon-button" aria-label={maximized ? 'Restore editor' : 'Maximize editor'} title={maximized ? 'Restore editor' : 'Maximize editor'} onClick={() => setMaximized(value => !value)}>{maximized ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button></div></div>
         <div className="coding-language-bar"><span className="coding-js-logo">{challenge.badge}</span><strong>{challenge.language.toUpperCase()}</strong><small>{challenge.runtime === 'java' ? 'Main.java' : challenge.runtime === 'jsx' ? 'App.jsx' : challenge.runtime === 'python' ? 'main.py' : challenge.runtime === 'html' ? 'index.html' : challenge.runtime === 'css' ? 'styles.css' : challenge.language}</small></div>
-        <div className="coding-editor-surface"><div className="coding-line-numbers" ref={gutter} aria-hidden="true">{code.split('\n').map((_, i) => <div key={i}>{i + 1}</div>)}</div><label className="sr-only" htmlFor="coding-editor">{challenge.language} editor</label><textarea ref={editor} id="coding-editor" className="coding-code-input" spellCheck={false} autoCapitalize="off" autoCorrect="off" wrap="off" value={code} disabled={running} onChange={event => changeCode(event.target.value)} onScroll={event => { if (gutter.current) gutter.current.scrollTop = event.target.scrollTop }} onKeyDown={event => {
+        <div className="coding-editor-surface"><div className="coding-line-numbers" ref={gutter} aria-hidden="true">{code.split('\n').map((_, i) => <div key={i}>{i + 1}</div>)}</div><label className="sr-only" htmlFor="coding-editor">{challenge.language} editor</label><textarea ref={editor} id="coding-editor" className="coding-code-input" spellCheck={false} autoCapitalize="off" autoCorrect="off" wrap="off" value={code} disabled={running || expired} onChange={event => changeCode(event.target.value)} onScroll={event => { if (gutter.current) gutter.current.scrollTop = event.target.scrollTop }} onKeyDown={event => {
           if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); run() }
           if (event.key === 'Tab') {
             event.preventDefault()
@@ -119,7 +136,7 @@ function CodingExercise({ challenge, onNewAttempt, onBack, onProgress, storageKe
             requestAnimationFrame(() => editor.current?.setSelectionRange(start + 2, start + 2))
           }
         }} /></div>
-        <div className="coding-run-bar"><span aria-live="polite">{running ? phase : savedNotice || `${challenge.language} · 3-second execution limit`}</span><button className="button button-primary" onClick={run} disabled={running}><Play size={16} />{running ? 'Running…' : 'Run test cases'}</button></div>
+        <div className="coding-run-bar"><span aria-live="polite">{running ? phase : savedNotice || `${challenge.language} · 3-second execution limit`}</span><button className="button button-primary" onClick={run} disabled={running || expired}><Play size={16} />{running ? 'Running…' : 'Run test cases'}</button></div>
         {preview && <section className="coding-preview-panel"><h2>Preview</h2><iframe title="Your code preview" sandbox="allow-same-origin" srcDoc={preview} /></section>}
         <section className="coding-results-panel" aria-label="Test results"><div className="coding-results-heading"><h2>Test results</h2>{results && <span className={passed === results.length ? 'coding-pass' : 'coding-fail'}>{passed}/{results.length} passed · {codingScore(passed, results.length, challenge.difficulty)}/{limits[challenge.difficulty]} points</span>}</div><div aria-live="polite">{error ? <p className="form-error" role="alert">{error}</p> : results ? <><p className="coding-result-message">{passed === results.length ? '✓ All tests passed!' : 'Some cases failed. Check the actual output below.'}</p><div className="coding-result-chips">{results.map((item, i) => <span key={item.name} className={item.passed ? 'coding-result-pass' : 'coding-result-fail'}>Case {i + 1} {item.passed ? '✓' : '✗'}</span>)}</div>{results.filter(item => !item.passed).map(item => <pre className="coding-reference" key={item.name}>{item.name}: {item.error || display(item.actual)}</pre>)}</> : <p className="coding-results-empty">Run your code to see test results here.</p>}</div></section>
       </section>

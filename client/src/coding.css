@@ -118,3 +118,8 @@
 .playground-input-label textarea { min-height: 100px; padding: 14px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; font: 14px/1.6 Consolas, monospace; resize: vertical; }
 .playground-output { margin-top: 24px; }
 .playground-output iframe { width: 100%; min-height: 320px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+.coding-exam-clock { display: flex; align-items: center; gap: 10px; color: var(--ink); padding: 8px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.coding-exam-clock strong { font-size: 22px; font-variant-numeric: tabular-nums; }
+.coding-exam-clock span { font-size: 12px; color: var(--muted); }
+.coding-time-expired { margin: 0; padding: 14px 24px; color: var(--red); background: var(--surface); }
+@media (max-width: 600px) { .coding-workspace-heading { flex-wrap: wrap; gap: 12px; } .coding-exam-clock span { display: none; } }
