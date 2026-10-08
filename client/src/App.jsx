@@ -780,8 +780,8 @@ export default function App() {
       )
     } else {
       navigate(
-        pendingRoute === '#coding'
-          ? '#coding'
+        pendingRoute?.startsWith('#coding')
+          ? pendingRoute
           : data.user.role === 'admin'
           ? '#admin/dashboard'
           : pendingRoute || '#dashboard'
@@ -1478,11 +1478,11 @@ export default function App() {
     content = !isAuthenticated ? (
       <LoadingState label="Opening login" />
     ) : (
-      <AuthenticatedCoding user={user} onExpired={() => {
+      <AuthenticatedCoding user={user} playground={routeId === 'playground'} navigate={navigate} onExpired={() => {
         clearToken()
         localStorage.removeItem('quizly-user')
         setUser(null)
-        pendingRouteRef.current = '#coding'
+        pendingRouteRef.current = route
         navigate('#login')
       }} />
     )

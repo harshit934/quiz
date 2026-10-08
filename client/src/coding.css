@@ -111,3 +111,10 @@
 .coding-preview-panel { padding: 20px; border-top: 1px solid var(--line); }
 .coding-preview-panel iframe { width: 100%; height: 320px; border: 1px solid var(--line); background: white; }
 .coding-js-logo { min-width: 32px; width: auto; padding: 4px; font-size: 12px; }
+.coding-hub-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.coding-playground .playground-code { height: 340px; min-height: 240px; flex: none; resize: vertical; }
+.coding-playground .coding-language-bar .icon-button { margin-left: auto; }
+.playground-input-label { display: flex; flex-direction: column; gap: 8px; margin-top: 24px; font-weight: 700; }
+.playground-input-label textarea { min-height: 100px; padding: 14px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; font: 14px/1.6 Consolas, monospace; resize: vertical; }
+.playground-output { margin-top: 24px; }
+.playground-output iframe { width: 100%; min-height: 320px; border: 1px solid var(--line); border-radius: 12px; background: white; }

@@ -51,7 +51,7 @@ export default function Navbar({
         </button>
         <nav className={`main-nav ${isAdmin ? 'admin-main-nav' : ''} ${menuOpen ? 'nav-open' : ''}`} aria-label="Main navigation">
           {links.map(({ label, route: target, icon: Icon }) => (
-            <button className={`nav-link ${route === target || (target === '#admin/dashboard' && route === '#admin') || (target === '#admin/exams' && route.startsWith('#admin/exams')) || (target === '#exams' && route.startsWith('#exams')) ? 'nav-link-active' : ''}`} key={target} onClick={() => go(target)}>
+            <button className={`nav-link ${route === target || (target === '#coding' && route.startsWith('#coding/')) || (target === '#admin/dashboard' && route === '#admin') || (target === '#admin/exams' && route.startsWith('#admin/exams')) || (target === '#exams' && route.startsWith('#exams')) ? 'nav-link-active' : ''}`} key={target} onClick={() => go(target)}>
               {Icon && <Icon size={15} />} {label}
             </button>
           ))}

@@ -11,7 +11,7 @@ const subjects = codingChallenges.filter(item => item.difficulty === 'Easy')
 const display = value => JSON.stringify(value, null, 2)
 const limits = { Easy: 40, Medium: 60, Hard: 100 }
 
-export default function CodingPage({ user }) {
+export default function CodingPage({ user, onPlayground }) {
   const [subject, setSubject] = useState(subjects[0].subjectId)
   const [difficulty, setDifficulty] = useState('All')
   const [challenge, setChallenge] = useState(null)
@@ -35,7 +35,7 @@ export default function CodingPage({ user }) {
   if (challenge) return <CodingExercise key={challenge.id} challenge={challenge} onBack={() => setChallenge(null)} onNewAttempt={() => openQuestion(challenge.difficulty)} onProgress={updateProgress} storageKey={storageKey} />
   return <main className="coding-hub">
     <div className="coding-breadcrumb"><Code2 size={19} /><span>Technology › <strong>Coding Practice</strong></span></div>
-    <div className="coding-hub-heading"><div><p className="eyebrow">Learn by building</p><h1>Coding Practice</h1><p>Choose a challenge. Write your solution. Pass every test.</p></div><span className="coding-library-count">18 subjects · 3 levels</span></div>
+    <div className="coding-hub-heading"><div><p className="eyebrow">Learn by building</p><h1>Coding Practice</h1><p>Choose a challenge. Write your solution. Pass every test.</p></div><div className="coding-hub-actions"><span className="coding-library-count">18 subjects · 3 levels</span><button className="button button-primary" onClick={onPlayground}><Code2 size={16} />Open playground</button></div></div>
     {savedDraft && <button className="button button-quiet" onClick={() => { setSubject(savedDraft.challenge.subjectId); setChallenge({ ...savedDraft.challenge, draft: savedDraft.code }) }}><Save size={15} /> Resume saved code · {savedDraft.challenge.subject}</button>}
     <div className="coding-filters">
       <label htmlFor="coding-subject">Subject<select id="coding-subject" value={subject} onChange={event => setSubject(event.target.value)}>{subjects.map(item => <option key={item.subjectId} value={item.subjectId}>{item.subject}</option>)}</select></label>
