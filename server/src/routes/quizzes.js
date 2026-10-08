@@ -85,7 +85,7 @@ router.get('/:id', optionalAuthenticate, asyncHandler(async (req, res) => {
   res.json({ ...quiz.toObject(), questions: quiz.questions.map(toQuestionView) })
 }))
 
-router.post('/:id/submit', asyncHandler(async (req, res) => {
+router.post('/:id/submit', authenticate, asyncHandler(async (req, res) => {
   const input = publicSubmission.parse(req.body)
   const quiz = await Quiz.findById(req.params.id)
     .populate('category', 'name slug icon color parentSlug rootSlug')
