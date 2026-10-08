@@ -1,5 +1,17 @@
 services:
   - type: web
+    name: quizly-frontend
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: client/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://quiz-1-f2c7.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+  - type: web
     name: quiz-platform-api
     runtime: node
     plan: free

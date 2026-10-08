@@ -4,12 +4,17 @@ import {
   Circle, Clock3, Flag, ListChecks, ShieldAlert,
 } from 'lucide-react'
 import { EmptyState, LoadingState } from './components/ui.jsx'
-import { request } from './services/api.js'
+import { getToken, request } from './services/api.js'
 
 const formatDate = value => new Date(value).toLocaleString()
 const formatClock = seconds => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`
 
 export default function ExamsPage({ route = [], user, navigate }) {
+  const authenticated = Boolean(
+    user &&
+      getToken() &&
+      getToken() !== 'demo-session'
+  )
   const [exams, setExams] = useState([])
   const [exam, setExam] = useState(null)
   const [attempt, setAttempt] = useState(null)
@@ -27,7 +32,7 @@ export default function ExamsPage({ route = [], user, navigate }) {
   const remainingAttempts = exam ? exam.maxAttempts - (exam.attempts?.length || 0) : 0
 
   useEffect(() => {
-    if (!user) {
+    if (!authenticated) {
       setLoading(false)
       return undefined
     }
@@ -45,10 +50,15 @@ export default function ExamsPage({ route = [], user, navigate }) {
       if (active) setLoading(false)
     })
     return () => { active = false }
-  }, [examId, user])
+  }, [examId, authenticated])
 
   useEffect(() => {
-    if (!examId || action !== 'attempt' || !attemptId) {
+    if (
+      !authenticated ||
+      !examId ||
+      action !== 'attempt' ||
+      !attemptId
+    ) {
       setAttempt(null)
       return undefined
     }
@@ -65,7 +75,7 @@ export default function ExamsPage({ route = [], user, navigate }) {
       if (active) setLoading(false)
     })
     return () => { active = false }
-  }, [examId, action, attemptId])
+  }, [authenticated, examId, action, attemptId])
 
   useEffect(() => {
     if (attempt?.status !== 'in-progress') return undefined
@@ -158,7 +168,7 @@ export default function ExamsPage({ route = [], user, navigate }) {
   const currentAnswer = currentQuestion && answers.find(answer => answer.questionId === currentQuestion.id)
   const completed = attempt && attempt.status !== 'in-progress'
 
-  if (!user) return <main className="page-width page-main"><section className="exam-panel exam-sign-in"><ShieldAlert size={28} /><h1>Sign in to view exams</h1><p className="muted">Exam registration and attempts are linked to your learner account.</p><button className="button button-primary" onClick={() => navigate('#login')}>Sign in</button></section></main>
+  if (!authenticated) return <main className="page-width page-main"><section className="exam-panel exam-sign-in"><ShieldAlert size={28} /><h1>Sign in to view exams</h1><p className="muted">Exam registration and attempts are linked to your learner account.</p><button className="button button-primary" onClick={() => navigate('#login')}>Sign in</button></section></main>
   if (loading && !exams.length && !exam && !attempt) return <main className="page-width page-main"><LoadingState label="Loading exams" /></main>
 
   return (

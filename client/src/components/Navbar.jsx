@@ -1,11 +1,29 @@
 import { useState } from 'react'
-import { BookOpenCheck, LogOut, Menu, Shield, Trophy, X } from 'lucide-react'
+import {
+  BookOpenCheck,
+  LogOut,
+  Menu,
+  Moon,
+  Shield,
+  Sun,
+  Trophy,
+  X,
+} from 'lucide-react'
 
-export default function Navbar({ user, isAdmin, route, navigate, onLogout }) {
+export default function Navbar({
+  user,
+  isAdmin,
+  route,
+  navigate,
+  onLogout,
+  theme,
+  onToggleTheme,
+}) {
   const [menuOpen, setMenuOpen] = useState(false)
   const links = isAdmin ? [
     { label: 'Admin Dashboard', route: '#admin/dashboard', icon: Shield },
     { label: 'Exams', route: '#admin/exams', icon: BookOpenCheck },
+    { label: 'Coding', route: '#coding' },
     { label: 'Manage Subjects', route: '#admin/subjects' },
     { label: 'Manage Quizzes', route: '#admin/quizzes' },
     { label: 'Manage Questions', route: '#admin/questions' },
@@ -15,6 +33,7 @@ export default function Navbar({ user, isAdmin, route, navigate, onLogout }) {
     { label: 'Home', route: '#home' },
     { label: 'Explore', route: '#explore' },
     { label: 'Exams', route: '#exams', icon: BookOpenCheck },
+    { label: 'Coding', route: '#coding' },
     ...(user ? [{ label: 'Dashboard', route: '#dashboard' }] : []),
     { label: 'Leaderboard', route: '#leaderboard', icon: Trophy },
   ]
@@ -44,6 +63,15 @@ export default function Navbar({ user, isAdmin, route, navigate, onLogout }) {
           </div>
         </nav>
         <div className="nav-actions">
+          <button
+            className="icon-button theme-toggle"
+            type="button"
+            onClick={onToggleTheme}
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
           {user ? <>
             <button className="user-chip" onClick={() => go(isAdmin ? '#admin/dashboard' : '#dashboard')} aria-label={`Open dashboard for ${user.name}`}>
               <span className="avatar avatar-small">{user.name?.slice(0, 1).toUpperCase()}</span><span>{user.name?.split(' ')[0]}</span>

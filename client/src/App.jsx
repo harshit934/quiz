@@ -1,11 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { AlertCircle, BookOpenCheck, LoaderCircle } from 'lucide-react'
+import {
+  AlertCircle,
+  BookOpenCheck,
+  LoaderCircle,
+  Moon,
+  Sun,
+} from 'lucide-react'
 
 import Navbar from './components/Navbar.jsx'
 import AdminQuestionsPage from './AdminQuestionsPage.jsx'
 import AdminExamsPage from './AdminExamsPage.jsx'
 import ExamsPage from './ExamsPage.jsx'
+import CodingPage from './CodingPage.jsx'
+import { exploreRoute } from './utils/exploreRoute.js'
 import { LoadingState, Toast } from './components/ui.jsx'
 import { demoCategories, demoQuizzes } from './data/demoData.js'
 import { fisherYates } from './utils/shuffle.js'
@@ -53,6 +61,13 @@ function storedUser() {
   } catch {
     return null
   }
+}
+
+function defaultRoute() {
+  const token = getToken()
+  const user = storedUser()
+  if (!token || token === 'demo-session' || !user) return '#login'
+  return user.role === 'admin' ? '#admin/dashboard' : '#dashboard'
 }
 
 function localDashboard(user) {
@@ -195,10 +210,14 @@ function localDashboard(user) {
 
 export default function App() {
   const [route, setRoute] = useState(
-    window.location.hash || '#home'
+    window.location.hash || defaultRoute()
   )
 
   const [user, setUser] = useState(storedUser)
+
+  const [theme, setTheme] = useState(
+    () => localStorage.getItem('quizly-theme') === 'dark' ? 'dark' : 'light'
+  )
 
   const [adminVerified, setAdminVerified] = useState(false)
 
@@ -246,6 +265,10 @@ export default function App() {
 
   const quizLoadRef = useRef(null)
 
+  const pendingRouteRef = useRef(null)
+
+  const pendingQuizRef = useRef(null)
+
   const [result, setResult] = useState(null)
 
   const [toast, setToast] = useState('')
@@ -259,6 +282,18 @@ export default function App() {
 
   const [routeName, routeId] = routeParts
 
+  useEffect(() => {
+    if (routeName === 'explore' && routeId && exploreRoute(routeId) === '#explore') {
+      window.location.hash = '#explore'
+    }
+  }, [routeName, routeId])
+
+  const isAuthenticated = Boolean(
+    user &&
+      getToken() &&
+      getToken() !== 'demo-session'
+  )
+
   const navigate = useCallback(target => {
     if (window.location.hash !== target) {
       window.location.hash = target
@@ -268,8 +303,17 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem('quizly-theme', theme)
+  }, [theme])
+
+  const toggleTheme = useCallback(() => {
+    setTheme(current => current === 'dark' ? 'light' : 'dark')
+  }, [])
+
+  useEffect(() => {
     const syncRoute = () =>
-      setRoute(window.location.hash || '#home')
+      setRoute(window.location.hash || defaultRoute())
 
     window.addEventListener('hashchange', syncRoute)
 
@@ -279,6 +323,26 @@ export default function App() {
         syncRoute
       )
   }, [])
+
+  useEffect(() => {
+    if (isAuthenticated) return
+
+    if (routeName === 'quiz' && routeId) {
+      pendingQuizRef.current = quizzes.find(quiz => String(quiz._id) === routeId) || { _id: routeId }
+      pendingRouteRef.current = `#quiz/${routeId}`
+      navigate('#login')
+    } else if (routeName === 'exams') {
+      pendingRouteRef.current = route
+      navigate('#login')
+    }
+  }, [
+    isAuthenticated,
+    navigate,
+    quizzes,
+    route,
+    routeId,
+    routeName,
+  ])
 
   useEffect(() => {
     if (
@@ -662,6 +726,22 @@ export default function App() {
       }
     )
 
+    applyAuth(data, mode)
+  }
+
+  async function submitGoogleAuth(credential) {
+    const data = await request(
+      '/auth/google',
+      {
+        method: 'POST',
+        body: JSON.stringify({ credential }),
+      }
+    )
+
+    applyAuth(data, 'google')
+  }
+
+  function applyAuth(data, mode) {
     setToken(data.token)
 
     localStorage.setItem(
@@ -683,20 +763,36 @@ export default function App() {
 
     setResult(null)
 
-    navigate(
-      data.user.role === 'admin'
-        ? '#admin/dashboard'
-        : '#dashboard'
-    )
+    const pendingRoute = pendingRouteRef.current
+    const pendingQuiz = pendingQuizRef.current
+    pendingRouteRef.current = null
+    pendingQuizRef.current = null
 
-    notify(
-      mode === 'register'
-        ? 'Your account is ready.'
-        : 'Welcome back.'
-    )
+    if (
+      data.user.role !== 'admin' &&
+      pendingRoute?.startsWith('#quiz/')
+    ) {
+      startQuiz(
+        pendingQuiz || {
+          _id: pendingRoute.slice('#quiz/'.length),
+        },
+        data.user
+      )
+    } else {
+      navigate(
+        data.user.role === 'admin'
+          ? '#admin/dashboard'
+          : pendingRoute || '#dashboard'
+      )
+    }
+
+    notify(mode === 'register' ? 'Your account is ready.' : 'Welcome back.')
   }
 
   function continueDemo() {
+    pendingRouteRef.current = null
+    pendingQuizRef.current = null
+
     const demoUser = {
       id: 'demo-user',
       name: 'Demo Learner',
@@ -728,7 +824,31 @@ export default function App() {
     )
   }
 
-  async function startQuiz(quiz) {
+  async function startQuiz(quiz, userForStart = user) {
+    if (!userForStart || !getToken() || getToken() === 'demo-session') {
+      pendingQuizRef.current = quiz
+      pendingRouteRef.current = `#quiz/${quiz._id}`
+      setActiveQuiz(null)
+      navigate('#login')
+      notify('Sign in to start a quiz.')
+      return
+    }
+    try {
+      const profile = await request('/users/profile')
+      setUser(profile)
+      localStorage.setItem('quizly-user', JSON.stringify(profile))
+    } catch (error) {
+      if (error.status === 401) {
+        clearToken()
+        localStorage.removeItem('quizly-user')
+        setUser(null)
+        pendingQuizRef.current = quiz
+        pendingRouteRef.current = `#quiz/${quiz._id}`
+        navigate('#login')
+        notify('Your session has expired. Sign in to start a quiz.')
+      } else notify(`Unable to verify your session. ${error.message}`)
+      return
+    }
     setResult(null)
 
     setActiveQuiz(null)
@@ -851,6 +971,14 @@ export default function App() {
     quiz,
     payload
   ) {
+    if (!isAuthenticated) {
+      pendingQuizRef.current = quiz
+      pendingRouteRef.current = `#quiz/${quiz._id}`
+      setActiveQuiz(null)
+      navigate('#login')
+      notify('Sign in to submit your quiz.')
+      return
+    }
     const answers = Object.entries(
       payload.answers
     ).map(
@@ -869,18 +997,14 @@ export default function App() {
     if (
       String(quiz._id).startsWith(
         'demo-'
-      ) ||
-      getToken() === 'demo-session'
+      )
     ) {
       completed =
         makeLocalAttempt(
           quiz,
           payload
         )
-    } else if (
-      user &&
-      getToken()
-    ) {
+    } else {
       try {
         completed = await request(
           '/attempts',
@@ -899,30 +1023,20 @@ export default function App() {
 
         savedToServer = true
       } catch (error) {
-        notify(
-          `Result saved on this device because the server is unavailable. ${error.message}`
-        )
-      }
-    } else {
-      try {
-        completed = await request(
-          `/quizzes/${quiz._id}/submit`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              quizId: quiz._id,
-              answers,
-              markedQuestionIds:
-                payload.markedQuestionIds,
-              timeTaken:
-                payload.timeTaken,
-            }),
-          }
-        )
-      } catch (error) {
-        notify(
-          `Result could not be checked by the server. ${error.message}`
-        )
+        if (error.status === 401) {
+          clearToken()
+          localStorage.removeItem('quizly-user')
+          setUser(null)
+          pendingQuizRef.current = quiz
+          pendingRouteRef.current = `#quiz/${quiz._id}`
+          setActiveQuiz(null)
+          navigate('#login')
+          notify('Your session has expired. Sign in to submit your quiz.')
+          return
+        }
+
+        notify(`Your quiz could not be graded. Please try again. ${error.message}`)
+        throw error
       }
     }
 
@@ -1221,10 +1335,12 @@ export default function App() {
             routeName
           )
         }
-        onGoogleAuth={credential => submitAuth({ credential }, 'google')}
+        onGoogleAuth={submitGoogleAuth}
         onContinueDemo={
           continueDemo
         }
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     )
   } else if (
@@ -1244,10 +1360,14 @@ export default function App() {
   } else if (
     routeName === 'quiz'
   ) {
-    content = activeQuiz ? (
+    content = !isAuthenticated ? (
+      <AuthPage mode="login" onModeChange={navigate} onSubmit={values => submitAuth(values, 'login')} onGoogleAuth={submitGoogleAuth} onContinueDemo={continueDemo} theme={theme} onToggleTheme={toggleTheme} />
+    ) : activeQuiz ? (
       <QuizPage
         key={activeQuiz._id}
         quiz={activeQuiz}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         onExit={() =>
           navigate('#explore')
         }
@@ -1325,10 +1445,12 @@ export default function App() {
             'login'
           )
         }
-        onGoogleAuth={credential => submitAuth({ credential }, 'google')}
+        onGoogleAuth={submitGoogleAuth}
         onContinueDemo={
           continueDemo
         }
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     )
   } else if (
@@ -1348,6 +1470,10 @@ export default function App() {
         }
       />
     )
+  } else if (
+    routeName === 'coding'
+  ) {
+    content = <CodingPage user={user} />
   } else if (
     routeName === 'exams'
   ) {
@@ -1461,13 +1587,7 @@ export default function App() {
         quizzes={quizzes}
         stats={stats}
         user={user}
-        onExplore={slug =>
-          navigate(
-            slug
-              ? `#explore/${slug}`
-              : '#explore'
-          )
-        }
+        onExplore={slug => navigate(exploreRoute(slug))}
         onStart={onStart}
         onRegister={() =>
           navigate(
@@ -1498,6 +1618,8 @@ export default function App() {
         <Navbar
           user={user}
           isAdmin={isAdmin}
+          theme={theme}
+          onToggleTheme={toggleTheme}
           route={`#${routeName || 'home'}${
             routeId
               ? `/${routeId}`

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   Activity, ArrowLeft, ArrowRight, Award, BookOpenCheck, Check, CheckCircle2,
   ChevronDown, Clock3, Flame, Flag, LockKeyhole, LogIn, Medal, Search,
-  Shield, Sparkles, Target, Trophy, UserRound, UsersRound, XCircle,
+  Moon, Shield, Sparkles, Sun, Target, Trophy, UserRound, UsersRound, XCircle,
 } from 'lucide-react'
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart,
@@ -104,7 +104,7 @@ export function HomePage({ categories, quizzes, stats, user, onExplore, onStart,
 
 export function ExplorePage({ quizzes, categories, onStart, initialCategory = 'all' }) {
   const [search, setSearch] = useState('')
-  const [category, setCategory] = useState(initialCategory)
+  const [category, setCategory] = useState(() => categories.some(item => item.slug === initialCategory) ? initialCategory : 'all')
   const [difficulty, setDifficulty] = useState('all')
   const [sort, setSort] = useState('newest')
   const [showFeatured, setShowFeatured] = useState(true)
@@ -171,7 +171,13 @@ export function ExplorePage({ quizzes, categories, onStart, initialCategory = 'a
   )
 }
 
-export function QuizPage({ quiz, onExit, onComplete }) {
+export function QuizPage({
+  quiz,
+  onExit,
+  onComplete,
+  theme,
+  onToggleTheme,
+}) {
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState({})
   const [marked, setMarked] = useState([])
@@ -211,7 +217,8 @@ export function QuizPage({ quiz, onExit, onComplete }) {
     if (submitted.current) return
     submitted.current = true
     setConfirm(false)
-    onComplete(quiz, { answers, markedQuestionIds: marked, timeTaken: elapsed })
+    Promise.resolve(onComplete(quiz, { answers, markedQuestionIds: marked, timeTaken: elapsed }))
+      .catch(() => { submitted.current = false })
   }
 
   useEffect(() => {
@@ -235,7 +242,22 @@ export function QuizPage({ quiz, onExit, onComplete }) {
 
   return (
     <main className="quiz-shell page-width">
-      <div className="quiz-topbar"><button className="back-link" onClick={onExit}><ArrowLeft size={16} /> Exit quiz</button><div className="quiz-title-block"><span className="eyebrow">{quiz.category?.name} · {quiz.difficulty}</span><h1>{quiz.title}</h1></div><div className={`timer-chip ${isLow ? 'timer-low' : ''}`} aria-live="polite"><Clock3 size={16} /><span>{formatTime(remaining)}</span></div></div>
+      <div className="quiz-topbar">
+        <button className="back-link" onClick={onExit}><ArrowLeft size={16} /> Exit quiz</button>
+        <div className="quiz-title-block"><span className="eyebrow">{quiz.category?.name} · {quiz.difficulty}</span><h1>{quiz.title}</h1></div>
+        <div className="quiz-header-actions">
+          <button
+            className="icon-button quiz-theme-toggle"
+            type="button"
+            onClick={onToggleTheme}
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
+          <div className={`timer-chip ${isLow ? 'timer-low' : ''}`} aria-live="polite"><Clock3 size={16} /><span>{formatTime(remaining)}</span></div>
+        </div>
+      </div>
       <div className="quiz-progress-row"><span>Question {current + 1} <span className="muted">of {questions.length}</span></span><span>{Math.round(((current + 1) / questions.length) * 100)}% complete</span></div>
       <div className="progress-track"><span style={{ width: `${((current + 1) / questions.length) * 100}%` }} /></div>
       <div className="quiz-layout">
@@ -336,7 +358,15 @@ export function LeaderboardPage({ categories, onCategoryChange, category, entrie
   )
 }
 
-export function AuthPage({ mode, onModeChange, onSubmit, onGoogleAuth, onContinueDemo }) {
+export function AuthPage({
+  mode,
+  onModeChange,
+  onSubmit,
+  onGoogleAuth,
+  onContinueDemo,
+  theme,
+  onToggleTheme,
+}) {
   const [name, setName] = useState('')
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -355,7 +385,7 @@ export function AuthPage({ mode, onModeChange, onSubmit, onGoogleAuth, onContinu
   }, [onGoogleAuth])
 
   useEffect(() => {
-    if (register || !googleClientId || !googleButtonRef.current) return undefined
+    if (!googleClientId || !googleButtonRef.current) return undefined
 
     let active = true
     loadGoogleIdentity().then(() => {
@@ -364,7 +394,7 @@ export function AuthPage({ mode, onModeChange, onSubmit, onGoogleAuth, onContinu
       window.google.accounts.id.initialize({
         client_id: googleClientId,
         ux_mode: 'popup',
-        context: 'signin',
+        context: register ? 'signup' : 'signin',
         callback: response => {
           if (!response.credential) {
             setError('Google sign-in did not return a credential.')
@@ -384,7 +414,7 @@ export function AuthPage({ mode, onModeChange, onSubmit, onGoogleAuth, onContinu
       const button = googleButtonRef.current
       button.replaceChildren()
       window.google.accounts.id.renderButton(button, {
-        theme: 'outline',
+        theme: theme === 'dark' ? 'filled_black' : 'outline',
         size: 'large',
         text: 'continue_with',
         shape: 'rectangular',
@@ -398,7 +428,7 @@ export function AuthPage({ mode, onModeChange, onSubmit, onGoogleAuth, onContinu
       active = false
       googleButtonRef.current?.replaceChildren()
     }
-  }, [googleClientId, register])
+  }, [googleClientId, register, theme])
 
   async function submit(event) {
     event.preventDefault()
@@ -418,27 +448,72 @@ export function AuthPage({ mode, onModeChange, onSubmit, onGoogleAuth, onContinu
   }
 
   return (
-    <main className="auth-page"><div className="auth-backdrop" /><div className="auth-wrap"><button className="back-link auth-back" onClick={() => onModeChange('#home')}><ArrowLeft size={16} /> Back to home</button><section className="auth-card"><div className="auth-illustration"><span className="auth-art-mark"><Sparkles size={19} /></span><p className="eyebrow">A few curious minutes</p><h2>Good things grow one question at a time.</h2><p>Make a little space for learning. The rest adds up.</p><div className="auth-sample"><span className="auth-sample-label"><CategoryIcon name="atom" size={15} /> TODAY'S LITTLE CHALLENGE</span><strong>What would you like to know next?</strong><div className="auth-sample-options"><i /><i /><i /></div><span className="auth-sample-foot"><Clock3 size={13} /> Just a few minutes</span></div></div><div className="auth-form-panel"><div className="auth-mark"><BookOpenCheck size={20} /></div><p className="eyebrow">{register ? 'Start your learning practice' : 'Welcome back'}</p><h1>{register ? 'Create your account' : 'Good to see you again.'}</h1><p className="muted">{register ? 'Save your quiz history and keep track of what is clicking.' : 'Sign in to pick up where your curiosity left off.'}</p>
-      <form onSubmit={submit} className="auth-form" noValidate>
-        {register && <label className="field-label">Your name<input autoComplete="name" required minLength={2} maxLength={60} value={name} onChange={event => setName(event.target.value)} placeholder="Jordan Lee" /></label>}
-        <label className="field-label">{register ? 'Email address' : 'Email or username'}<input autoComplete={register ? 'email' : 'username'} required type={register ? 'email' : 'text'} value={identifier} onChange={event => setIdentifier(event.target.value)} placeholder={register ? 'you@example.com' : 'Email address or username'} /></label>
-        <label className="field-label">Password<span className="password-field"><input autoComplete={register ? 'new-password' : 'current-password'} required minLength={8} type={visible ? 'text' : 'password'} value={password} onChange={event => setPassword(event.target.value)} placeholder="At least 8 characters" /><button type="button" className="password-toggle" aria-label={visible ? 'Hide password' : 'Show password'} onClick={() => setVisible(value => !value)}>{visible ? 'Hide' : 'Show'}</button></span></label>
-        {error && <p className="form-error" role="alert">{error}</p>}
-        <button className="button button-primary auth-submit" type="submit" disabled={loading}>{loading ? <span className="button-spinner" /> : register ? 'Create account' : 'Sign in'} <ArrowRight size={16} /></button>
-      </form>
-              {!register && <>
-          <div className="auth-divider"><span>or</span></div>
-          {googleClientId
-            ? <div ref={googleButtonRef} aria-label="Continue with Google" style={{ minHeight: 46, display: 'flex', justifyContent: 'center' }} />
-            : <button className="button button-outline" type="button" onClick={() => setGoogleNotice('Google sign-in needs VITE_GOOGLE_CLIENT_ID in the frontend and GOOGLE_CLIENT_ID on the API.')}>
-                <span aria-hidden="true" style={{ color: '#4285f4', fontWeight: 800 }}>G</span> Continue with Google
-              </button>}
-          {!googleClientId && <p className="auth-note" role="status">${googleNotice || 'Google sign-in setup is required to continue with Google.'}</p>}
-          {googleLoading && <p className="auth-note" role="status">Signing in with Google?</p>}
-        </>}
-        <p className="auth-switch">{register ? 'Already have an account?' : 'New to Quizly?'} <button onClick={() => onModeChange(register ? '#login' : '#register')}>{register ? 'Log in' : 'Create an account'}</button></p>
-      <div className="auth-divider"><span>or</span></div><button className="button button-outline demo-button" onClick={onContinueDemo}><UserRound size={16} /> Continue with a demo profile</button><p className="auth-note"><Shield size={13} /> Your personal information stays private.</p>
-      </div></section><p className="auth-footnote">Focused practice. Useful feedback. No noise.</p></div></main>
+    <main className="auth-page">
+      <button
+        className="icon-button auth-theme-toggle"
+        type="button"
+        onClick={onToggleTheme}
+        aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+        title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+      >
+        {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+      </button>
+      <div className="auth-backdrop" />
+      <div className="auth-wrap">
+        <button className="back-link auth-back" onClick={() => onModeChange('#home')}><ArrowLeft size={16} /> Back to home</button>
+        <section className="auth-card">
+          <div className="auth-illustration">
+            <span className="auth-art-mark"><Sparkles size={19} /></span>
+            <p className="eyebrow">A few curious minutes</p>
+            <h2>Good things grow one question at a time.</h2>
+            <p>Make a little space for learning. The rest adds up.</p>
+            <div className="auth-sample">
+              <span className="auth-sample-label"><CategoryIcon name="atom" size={15} /> TODAY'S LITTLE CHALLENGE</span>
+              <strong>What would you like to know next?</strong>
+              <div className="auth-sample-options"><i /><i /><i /></div>
+              <span className="auth-sample-foot"><Clock3 size={13} /> Just a few minutes</span>
+            </div>
+          </div>
+          <div className="auth-form-panel">
+            <div className="auth-mark"><BookOpenCheck size={20} /></div>
+            <p className="eyebrow">{register ? 'Start your learning practice' : 'Welcome back'}</p>
+            <h1>{register ? 'Create your account' : 'Good to see you again.'}</h1>
+            <p className="muted">{register ? 'Save your quiz history and keep track of what is clicking.' : 'Sign in to pick up where your curiosity left off.'}</p>
+            <form onSubmit={submit} className="auth-form" noValidate>
+              {register && <label className="field-label">Your name<input autoComplete="name" required minLength={2} maxLength={60} value={name} onChange={event => setName(event.target.value)} placeholder="Jordan Lee" /></label>}
+              <label className="field-label">{register ? 'Email address' : 'Email or username'}<input autoComplete={register ? 'email' : 'username'} required type={register ? 'email' : 'text'} value={identifier} onChange={event => setIdentifier(event.target.value)} placeholder={register ? 'you@example.com' : 'Email address or username'} /></label>
+              <label className="field-label">Password<span className="password-field"><input autoComplete={register ? 'new-password' : 'current-password'} required minLength={8} type={visible ? 'text' : 'password'} value={password} onChange={event => setPassword(event.target.value)} placeholder="At least 8 characters" /><button type="button" className="password-toggle" aria-label={visible ? 'Hide password' : 'Show password'} onClick={() => setVisible(value => !value)}>{visible ? 'Hide' : 'Show'}</button></span></label>
+              {error && <p className="form-error" role="alert">{error}</p>}
+              <button className="button button-primary auth-submit" type="submit" disabled={loading}>{loading ? <span className="button-spinner" /> : register ? 'Create account' : 'Sign in'} <ArrowRight size={16} /></button>
+            </form>
+            {<>
+              <div className="auth-divider"><span>or</span></div>
+              {googleClientId
+                ? <div className={`google-signin-button ${googleLoading ? 'google-signin-loading' : ''}`} ref={googleButtonRef} aria-label="Continue with Google" />
+                : <button
+                    className="button button-outline google-unconfigured"
+                    type="button"
+                    onClick={() => setGoogleNotice(
+                      'Google sign-in needs VITE_GOOGLE_CLIENT_ID in the frontend and GOOGLE_CLIENT_ID on the API.'
+                    )}
+                  >
+                    <span className="google-mark" aria-hidden="true">G</span>
+                    Continue with Google
+                  </button>}
+              {!googleClientId && <p className="auth-note google-setup-note" role="status">
+                {googleNotice || 'Google sign-in setup is required to continue with Google.'}
+              </p>}
+              {googleLoading && <p className="auth-note" role="status">Signing in with Google…</p>}
+            </>}
+            <p className="auth-switch">{register ? 'Already have an account?' : 'New to Quizly?'} <button onClick={() => onModeChange(register ? '#login' : '#register')}>{register ? 'Log in' : 'Create an account'}</button></p>
+            <div className="auth-divider"><span>or</span></div>
+            <button className="button button-outline demo-button" onClick={onContinueDemo}><UserRound size={16} /> Continue with a demo profile</button>
+            <p className="auth-note"><Shield size={13} /> Your personal information stays private.</p>
+          </div>
+        </section>
+        <p className="auth-footnote">Focused practice. Useful feedback. No noise.</p>
+      </div>
+    </main>
   )
 }
 
