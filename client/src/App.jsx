@@ -1221,6 +1221,7 @@ export default function App() {
             routeName
           )
         }
+        onGoogleAuth={credential => submitAuth({ credential }, 'google')}
         onContinueDemo={
           continueDemo
         }
@@ -1324,6 +1325,7 @@ export default function App() {
             'login'
           )
         }
+        onGoogleAuth={credential => submitAuth({ credential }, 'google')}
         onContinueDemo={
           continueDemo
         }

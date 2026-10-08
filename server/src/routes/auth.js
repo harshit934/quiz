@@ -1,10 +1,16 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import jwt from 'jsonwebtoken'
+import { randomBytes } from 'node:crypto'
+import { OAuth2Client } from 'google-auth-library'
 import User from '../models/User.js'
 import asyncHandler from '../middleware/asyncHandler.js'
 
 const router = Router()
+const googleClient = new OAuth2Client()
+const googleCredentialSchema = z.object({
+  credential: z.string().min(1).max(10000),
+})
 const registrationCredentialsSchema = z.object({
   email: z.string().trim().email().max(254),
   password: z.string().min(8).max(100),
@@ -45,6 +51,49 @@ router.post('/login', asyncHandler(async (req, res) => {
   if (!user || !(await user.comparePassword(input.password))) {
     return res.status(401).json({ message: 'Email, username, or password is incorrect.' })
   }
+  res.json({ token: createToken(user), user: publicUser(user) })
+}))
+
+router.post('/google', asyncHandler(async (req, res) => {
+  const { credential } = googleCredentialSchema.parse(req.body)
+  if (!process.env.GOOGLE_CLIENT_ID) {
+    const error = new Error('Google sign-in is not configured on this server.')
+    error.status = 503
+    throw error
+  }
+
+  let ticket
+  try {
+    ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    })
+  } catch {
+    return res.status(401).json({ message: 'Google sign-in could not be verified.' })
+  }
+
+  const profile = ticket.getPayload()
+  if (!profile?.sub || !profile.email || profile.email_verified !== true) {
+    return res.status(401).json({ message: 'Google must provide a verified email address.' })
+  }
+
+  const email = profile.email.toLowerCase()
+  let user = await User.findOne({ googleId: profile.sub })
+  if (!user) {
+    user = await User.findOne({ email })
+    if (user) {
+      user.googleId = profile.sub
+      await user.save()
+    } else {
+      user = await User.create({
+        name: profile.name || email.split('@')[0],
+        email,
+        googleId: profile.sub,
+        password: randomBytes(32).toString('base64url'),
+      })
+    }
+  }
+
   res.json({ token: createToken(user), user: publicUser(user) })
 }))
 

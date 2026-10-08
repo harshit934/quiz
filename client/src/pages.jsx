@@ -17,6 +17,27 @@ import { authValidationError } from './utils/authValidation.js'
 const chartColors = ['#df7254', '#367f76', '#d7a740', '#678bb8', '#4a865f', '#aa789b', '#d58c57']
 const initials = name => (name || '?').split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase()
 const percent = value => `${Math.round(value || 0)}%`
+let googleIdentityScript
+
+function loadGoogleIdentity() {
+  if (window.google?.accounts?.id) return Promise.resolve()
+  if (googleIdentityScript) return googleIdentityScript
+
+  googleIdentityScript = new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    script.onload = resolve
+    script.onerror = () => {
+      googleIdentityScript = null
+      reject(new Error('Google sign-in could not be loaded. Please try again.'))
+    }
+    document.head.append(script)
+  })
+
+  return googleIdentityScript
+}
 
 export function HomePage({ categories, quizzes, stats, user, onExplore, onStart, onRegister, onLeaderboard }) {
   const featured = quizzes.filter(quiz => quiz.featured).slice(0, 3)
@@ -315,14 +336,69 @@ export function LeaderboardPage({ categories, onCategoryChange, category, entrie
   )
 }
 
-export function AuthPage({ mode, onModeChange, onSubmit, onContinueDemo }) {
+export function AuthPage({ mode, onModeChange, onSubmit, onGoogleAuth, onContinueDemo }) {
   const [name, setName] = useState('')
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [visible, setVisible] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+  const [googleNotice, setGoogleNotice] = useState('')
+  const googleButtonRef = useRef(null)
+  const googleAuthRef = useRef(onGoogleAuth)
   const register = mode === 'register'
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+
+  useEffect(() => {
+    googleAuthRef.current = onGoogleAuth
+  }, [onGoogleAuth])
+
+  useEffect(() => {
+    if (register || !googleClientId || !googleButtonRef.current) return undefined
+
+    let active = true
+    loadGoogleIdentity().then(() => {
+      if (!active || !googleButtonRef.current) return
+
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        ux_mode: 'popup',
+        context: 'signin',
+        callback: response => {
+          if (!response.credential) {
+            setError('Google sign-in did not return a credential.')
+            return
+          }
+
+          setError('')
+          setGoogleLoading(true)
+          Promise.resolve(googleAuthRef.current(response.credential))
+            .catch(signInError => setError(signInError.message))
+            .finally(() => setGoogleLoading(false))
+        },
+        auto_select: false,
+        cancel_on_tap_outside: true,
+      })
+
+      const button = googleButtonRef.current
+      button.replaceChildren()
+      window.google.accounts.id.renderButton(button, {
+        theme: 'outline',
+        size: 'large',
+        text: 'continue_with',
+        shape: 'rectangular',
+        width: Math.min(400, Math.max(240, button.clientWidth)),
+      })
+    }).catch(loadError => {
+      if (active) setError(loadError.message)
+    })
+
+    return () => {
+      active = false
+      googleButtonRef.current?.replaceChildren()
+    }
+  }, [googleClientId, register])
 
   async function submit(event) {
     event.preventDefault()
@@ -350,7 +426,17 @@ export function AuthPage({ mode, onModeChange, onSubmit, onContinueDemo }) {
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="button button-primary auth-submit" type="submit" disabled={loading}>{loading ? <span className="button-spinner" /> : register ? 'Create account' : 'Sign in'} <ArrowRight size={16} /></button>
       </form>
-      <p className="auth-switch">{register ? 'Already have an account?' : 'New to Quizly?'} <button onClick={() => onModeChange(register ? '#login' : '#register')}>{register ? 'Log in' : 'Create an account'}</button></p>
+              {!register && <>
+          <div className="auth-divider"><span>or</span></div>
+          {googleClientId
+            ? <div ref={googleButtonRef} aria-label="Continue with Google" style={{ minHeight: 46, display: 'flex', justifyContent: 'center' }} />
+            : <button className="button button-outline" type="button" onClick={() => setGoogleNotice('Google sign-in needs VITE_GOOGLE_CLIENT_ID in the frontend and GOOGLE_CLIENT_ID on the API.')}>
+                <span aria-hidden="true" style={{ color: '#4285f4', fontWeight: 800 }}>G</span> Continue with Google
+              </button>}
+          {!googleClientId && <p className="auth-note" role="status">${googleNotice || 'Google sign-in setup is required to continue with Google.'}</p>}
+          {googleLoading && <p className="auth-note" role="status">Signing in with Google?</p>}
+        </>}
+        <p className="auth-switch">{register ? 'Already have an account?' : 'New to Quizly?'} <button onClick={() => onModeChange(register ? '#login' : '#register')}>{register ? 'Log in' : 'Create an account'}</button></p>
       <div className="auth-divider"><span>or</span></div><button className="button button-outline demo-button" onClick={onContinueDemo}><UserRound size={16} /> Continue with a demo profile</button><p className="auth-note"><Shield size={13} /> Your personal information stays private.</p>
       </div></section><p className="auth-footnote">Focused practice. Useful feedback. No noise.</p></div></main>
   )
