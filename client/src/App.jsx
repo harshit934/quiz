@@ -12,7 +12,7 @@ import Navbar from './components/Navbar.jsx'
 import AdminQuestionsPage from './AdminQuestionsPage.jsx'
 import AdminExamsPage from './AdminExamsPage.jsx'
 import ExamsPage from './ExamsPage.jsx'
-import CodingPage from './CodingPage.jsx'
+import AuthenticatedCoding from './AuthenticatedCoding.jsx'
 import { exploreRoute } from './utils/exploreRoute.js'
 import { LoadingState, Toast } from './components/ui.jsx'
 import { demoCategories, demoQuizzes } from './data/demoData.js'
@@ -331,7 +331,7 @@ export default function App() {
       pendingQuizRef.current = quizzes.find(quiz => String(quiz._id) === routeId) || { _id: routeId }
       pendingRouteRef.current = `#quiz/${routeId}`
       navigate('#login')
-    } else if (routeName === 'exams') {
+    } else if (routeName === 'exams' || routeName === 'coding') {
       pendingRouteRef.current = route
       navigate('#login')
     }
@@ -780,7 +780,9 @@ export default function App() {
       )
     } else {
       navigate(
-        data.user.role === 'admin'
+        pendingRoute === '#coding'
+          ? '#coding'
+          : data.user.role === 'admin'
           ? '#admin/dashboard'
           : pendingRoute || '#dashboard'
       )
@@ -1473,7 +1475,17 @@ export default function App() {
   } else if (
     routeName === 'coding'
   ) {
-    content = <CodingPage user={user} />
+    content = !isAuthenticated ? (
+      <LoadingState label="Opening login" />
+    ) : (
+      <AuthenticatedCoding user={user} onExpired={() => {
+        clearToken()
+        localStorage.removeItem('quizly-user')
+        setUser(null)
+        pendingRouteRef.current = '#coding'
+        navigate('#login')
+      }} />
+    )
   } else if (
     routeName === 'exams'
   ) {
