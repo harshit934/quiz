@@ -33,12 +33,41 @@ export function saveNamedProgram(storage, account, program) {
   const programs = readNamedPrograms(storage, account)
   const existing = programs.find(item => item.language === program.language && item.name.toLowerCase() === name.toLowerCase())
   if (existing && existing.id !== program.id) throw new Error('That name is already used for this language. Choose another name or open the existing program.')
-  const saved = { ...program, name, id: program.id || crypto.randomUUID(), updatedAt: new Date().toISOString() }
+  const saved = { ...program, name, id: programs.some(item => item.id === program.id) ? program.id : crypto.randomUUID(), updatedAt: new Date().toISOString() }
   const next = [saved, ...programs.filter(item => item.id !== saved.id)]
   storage.setItem(`quizly-playground-${account}-programs`, JSON.stringify(next))
   const restored = readNamedPrograms(storage, account).find(item => item.id === saved.id)
-  if (!restored || restored.code !== saved.code || restored.input !== saved.input) throw new Error('Unable to save. Copy your code to keep it.')
+  if (!restored || restored.name !== saved.name || restored.code !== saved.code || restored.input !== saved.input) throw new Error('Unable to save. Copy your code to keep it.')
   return saved
+}
+
+export function renameSavedProgram(storage, account, id, name, languages) {
+  const program = listSavedPrograms(storage, account, languages).find(item => item.id === id)
+  if (!program) throw new Error('This saved program is no longer available.')
+  return saveNamedProgram(storage, account, { ...program, name })
+}
+
+export function deleteSavedProgram(storage, account, id, languages) {
+  const program = listSavedPrograms(storage, account, languages).find(item => item.id === id)
+  if (!program) throw new Error('This saved program is no longer available.')
+  const key = `quizly-playground-${account}-programs`
+  const runtime = { react: 'jsx', 'node-js': 'nodejs', 'cloud-computing': 'bash' }[program.language] || program.language
+  const draftKey = `quizly-playground-${account}-${runtime}`
+  const previous = storage.getItem(key)
+  const oldDraft = storage.getItem(draftKey)
+  try {
+    storage.setItem(key, JSON.stringify(readNamedPrograms(storage, account).filter(item => item.id !== id)))
+    const draft = readPlaygroundDraft(storage, draftKey)
+    if (draft?.code === program.code && draft?.input === program.input) storage.removeItem(draftKey)
+    if (listSavedPrograms(storage, account, languages).some(item => item.id === id)) throw new Error('Unable to delete the saved program.')
+    return program
+  } catch (error) {
+    try {
+      if (previous === null) storage.removeItem(key); else storage.setItem(key, previous)
+      if (oldDraft === null) storage.removeItem(draftKey); else storage.setItem(draftKey, oldDraft)
+    } catch { /* Keep the failure visible; do not claim deletion succeeded. */ }
+    throw error
+  }
 }
 
 export function listSavedPrograms(storage, account, languages) {

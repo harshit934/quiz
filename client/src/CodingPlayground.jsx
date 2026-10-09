@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Play, RotateCcw, Save } from 'lucide-react'
+import { ArrowLeft, Download, Play, RotateCcw, Save } from 'lucide-react'
 import { generateCodingChallenge } from '../../shared/generateCodingChallenge.js'
 import { runSubjectChallenge } from './utils/subjectRunner.js'
-import { readPlaygroundDraft, readPlaygroundLanguage, savePlaygroundDraft, readNamedPrograms, saveNamedProgram, listSavedPrograms } from './utils/playgroundDraft.js'
+import { readPlaygroundDraft, readPlaygroundLanguage, savePlaygroundDraft, readNamedPrograms, saveNamedProgram, listSavedPrograms, renameSavedProgram, deleteSavedProgram } from './utils/playgroundDraft.js'
+import { downloadProgram } from './utils/programDownload.js'
 import { compilerLanguages } from '../../shared/playgroundLanguages.js'
 import './coding.css'
 
@@ -42,6 +43,8 @@ function PlaygroundEditor({ account, language, opened, focusEditor, onOpen, onLa
   const [programName, setProgramName] = useState(opened?.name || '')
   const [programId, setProgramId] = useState(opened?.id || null)
   const [programs, setPrograms] = useState(() => listSavedPrograms(window.localStorage, account, languages))
+  const [management, setManagement] = useState(null)
+  const [managementError, setManagementError] = useState('')
   const [running, setRunning] = useState(false)
   const [message, setMessage] = useState(opened ? `Opened “${opened.name}” from this browser.` : draft ? 'Saved draft restored from this browser.' : '')
   const [phase, setPhase] = useState('')
@@ -60,6 +63,22 @@ function PlaygroundEditor({ account, language, opened, focusEditor, onOpen, onLa
   const web = ['html', 'css', 'jsx'].includes(challenge.runtime)
   const stdin = Boolean(compiled)
   function edit(setter, value) { setter(value); setMessage('Unsaved changes'); setError(''); setOutput(null); setPreview('') }
+  function manage(type, program) { setManagement({ type, program, name: program.name }); setManagementError('') }
+  function confirmManagement(event) {
+    event.preventDefault()
+    try {
+      if (management.type === 'rename') {
+        const renamed = renameSavedProgram(window.localStorage, account, management.program.id, management.name, languages)
+        if (programId === management.program.id) { setProgramName(renamed.name); setProgramId(renamed.id) }
+        setMessage(`Renamed to “${renamed.name}”.`)
+      } else {
+        const deleted = deleteSavedProgram(window.localStorage, account, management.program.id, languages)
+        if (programId === deleted.id) setProgramId(null)
+        setMessage(`Deleted saved program “${deleted.name}”. Any code currently in the editor is kept.`)
+      }
+      setPrograms(listSavedPrograms(window.localStorage, account, languages)); setManagement(null)
+    } catch (failure) { setManagementError(failure.message || 'Unable to update saved programs.') }
+  }
   function save() {
     try {
       const saved = saveNamedProgram(window.localStorage, account, { id: programId, name: programName, language, code, input })
@@ -96,7 +115,12 @@ function PlaygroundEditor({ account, language, opened, focusEditor, onOpen, onLa
       <h2>Saved programs ({programs.length})</h2>
       {programs.length === 0 ? <p className="muted">No saved programs found for this account in this browser.</p> : programs.map(program => <article key={program.id}>
         <div><strong>{program.name}</strong><small>{languages.find(([id]) => id === program.language)?.[1] || program.language}</small></div>
-        <button className="button button-outline" disabled={running} onClick={() => onOpen(program)} aria-label={`Open ${program.name}`}>Open</button>
+        <div className="program-actions">
+          <button className="button button-outline" disabled={running} onClick={() => onOpen(program)} aria-label={`Open ${program.name}`}>Open</button>
+          <button className="button button-quiet" onClick={() => downloadProgram(program)} aria-label={`Download ${program.name}`}><Download size={15} />Download</button>
+          <button className="button button-quiet" disabled={running} onClick={() => manage('rename', program)} aria-label={`Rename ${program.name}`}>Rename</button>
+          <button className="button button-quiet program-delete" disabled={running} onClick={() => manage('delete', program)} aria-label={`Delete ${program.name}`}>Delete</button>
+        </div>
       </article>)}
     </section>
     <p className="muted">{instructions}</p>
@@ -104,10 +128,16 @@ function PlaygroundEditor({ account, language, opened, focusEditor, onOpen, onLa
     <section className="coding-editor-panel" aria-label="Playground editor">
       <div className="coding-language-bar"><span className="coding-js-logo">{challenge.badge}</span><strong>{challenge.language}{programName ? ` · ${programName}` : ''}</strong><button className="icon-button" aria-label="Reset playground code" disabled={running} onClick={() => { edit(setCode, defaults[language][0]); setInput(defaults[language][1]) }}><RotateCcw size={18} /></button></div>
       <label className="sr-only" htmlFor="playground-code">{challenge.language} playground editor</label><textarea ref={editor} id="playground-code" className="coding-code-input playground-code" value={code} disabled={running} spellCheck={false} onChange={event => edit(setCode, event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); run() } }} />
-      <div className="coding-run-bar"><span aria-live="polite">{running ? phase : '3-second execution limit · Ctrl+Enter to run'}</span><button className="button button-primary" disabled={running} onClick={run}><Play size={16} />{running ? 'Running…' : 'Run code'}</button></div>
+      <div className="coding-run-bar"><span aria-live="polite">{running ? phase : '3-second execution limit · Ctrl+Enter to run'}</span><button className="button button-quiet" onClick={() => downloadProgram({ name: programName, language, code })}><Download size={16} />Download code</button><button className="button button-primary" disabled={running} onClick={run}><Play size={16} />{running ? 'Running…' : 'Run code'}</button></div>
     </section>
     {!web && <label className="playground-input-label" htmlFor="playground-input">{stdin ? 'Standard input' : 'JSON input'}<textarea id="playground-input" value={input} disabled={running} spellCheck={false} onChange={event => edit(setInput, event.target.value)} /></label>}
     <section className="playground-output" aria-label="Playground output"><h2>{web ? 'Preview' : 'Output'}</h2><div aria-live="polite">{error && <p role="alert" className="form-error">{error}</p>}{output?.map(item => <pre className="coding-reference" key={item.name}>{item.error || (typeof item.actual === 'string' ? item.actual : JSON.stringify(item.actual, null, 2))}</pre>)}{preview && <iframe title="Playground preview" sandbox="allow-same-origin" srcDoc={preview} />}{!output && !error && <p className="muted">Run your code to see {web ? 'a preview' : 'the output'}.</p>}</div></section>
     <p className="coding-local-note">Saved code stays in this browser for your account. Save changes before switching languages or leaving the page.</p>
+    {management && <div className="modal-backdrop" onKeyDown={event => { if (event.key === 'Escape') setManagement(null) }}><form className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="manage-program-title" onSubmit={confirmManagement}>
+      <h2 id="manage-program-title">{management.type === 'rename' ? 'Rename program' : 'Delete saved program?'}</h2>
+      {management.type === 'rename' ? <label className="field-label">New program name<input autoFocus required maxLength={80} value={management.name} onChange={event => setManagement({ ...management, name: event.target.value })} /></label> : <p>Delete “{management.program.name}” from this browser? This cannot be undone. Any code currently in the editor will stay there.</p>}
+      {managementError && <p role="alert" className="form-error">{managementError}</p>}
+      <div className="modal-actions"><button autoFocus={management.type === 'delete'} type="button" className="button button-quiet" onClick={() => setManagement(null)}>Cancel</button><button type="submit" className="button button-primary">{management.type === 'rename' ? 'Save name' : 'Delete program'}</button></div>
+    </form></div>}
   </main>
 }

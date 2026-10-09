@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readPlaygroundDraft, readPlaygroundLanguage, savePlaygroundDraft, readNamedPrograms, saveNamedProgram, listSavedPrograms } from './playgroundDraft.js'
+import { readPlaygroundDraft, readPlaygroundLanguage, savePlaygroundDraft, readNamedPrograms, saveNamedProgram, listSavedPrograms, renameSavedProgram, deleteSavedProgram } from './playgroundDraft.js'
 test('playground save restores exact code and input without mixing accounts or languages', () => {
   const data = new Map()
   const storage = { getItem: key => data.get(key) || null, setItem: (key, value) => data.set(key, value) }
@@ -68,4 +68,35 @@ test('saved program library exposes older drafts without duplicating named progr
   saveNamedProgram(storage, 'alice', { ...recovered[0], name: 'My Python' })
   assert.equal(listSavedPrograms(storage, 'alice', languages).length, 2)
   assert.equal(listSavedPrograms(storage, 'alice', languages)[0].name, 'My Python')
+})
+
+test('rename preserves saved code, rejects duplicate names and deletion removes matching legacy drafts', () => {
+  const data = new Map()
+  const storage = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) }
+  const languages = [['python', 'Python']]
+  const first = saveNamedProgram(storage, 'alice', { name: 'First', language: 'python', code: 'print("saved")', input: '123' })
+  const second = saveNamedProgram(storage, 'alice', { name: 'Second', language: 'python', code: 'print("second")', input: '' })
+  savePlaygroundDraft(storage, 'quizly-playground-alice-python', first)
+  const renamed = renameSavedProgram(storage, 'alice', first.id, 'Renamed', languages)
+  assert.equal(renamed.code, first.code)
+  assert.equal(renamed.input, first.input)
+  assert.throws(() => renameSavedProgram(storage, 'alice', first.id, 'second', languages), /already used/)
+  assert.throws(() => renameSavedProgram(storage, 'alice', first.id, ' ', languages), /program name/)
+  assert.throws(() => deleteSavedProgram(storage, 'bob', first.id, languages), /no longer/)
+  deleteSavedProgram(storage, 'alice', first.id, languages)
+  assert.deepEqual(listSavedPrograms(storage, 'alice', languages).map(item => item.id), [second.id])
+  assert.equal(readPlaygroundDraft(storage, 'quizly-playground-alice-python'), null)
+  savePlaygroundDraft(storage, 'quizly-playground-alice-python', { code: 'old draft', input: '' })
+  const legacy = listSavedPrograms(storage, 'alice', languages).find(item => item.id.startsWith('legacy-'))
+  deleteSavedProgram(storage, 'alice', legacy.id, languages)
+  assert.deepEqual(listSavedPrograms(storage, 'alice', languages).map(item => item.id), [second.id])
+})
+
+test('deletion reports storage failures and restores the saved program', () => {
+  const data = new Map()
+  const storage = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: () => { throw new Error('blocked') } }
+  const program = saveNamedProgram(storage, 'alice', { name: 'Keep', language: 'c', code: 'code', input: '' })
+  savePlaygroundDraft(storage, 'quizly-playground-alice-c', program)
+  assert.throws(() => deleteSavedProgram(storage, 'alice', program.id, [['c', 'C']]), /blocked/)
+  assert.equal(readNamedPrograms(storage, 'alice')[0].id, program.id)
 })

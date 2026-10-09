@@ -131,3 +131,6 @@
 .playground-saved-list article { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--line, #d8dedb); }
 .playground-saved-list article div { min-width: 0; overflow-wrap: anywhere; }
 .playground-saved-list small { display: block; margin-top: 4px; color: var(--muted); }
+.playground-saved-list .program-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.program-delete { color: var(--red, #b83c3c); }
+@media (max-width: 600px) { .playground-saved-list article { flex-wrap: wrap; } .playground-saved-list .program-actions { width: 100%; justify-content: flex-start; } .coding-playground .coding-run-bar { flex-wrap: wrap; } }
