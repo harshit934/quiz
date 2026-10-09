@@ -59,12 +59,12 @@ function PlaygroundEditor({ account, language, onLanguage, onBack }) {
       let parsed = null
       if (!web && !stdin) { try { parsed = JSON.parse(input) } catch { throw new Error('Input must be valid JSON.') } }
       const testCases = web ? [] : [{ name: 'Output', input: parsed, stdin: stdin ? input : undefined, expected: null }]
-      const result = await runSubjectChallenge({ ...challenge, testCases }, code, value => { if (active.current) setPhase(value) })
+      const result = await runSubjectChallenge({ ...challenge, testCases, playground: true }, code, value => { if (active.current) setPhase(value) })
       if (active.current) { setOutput(result.results); setPreview(result.preview || '') }
     } catch (failure) { if (active.current) setError(failure.message) }
     finally { if (active.current) setRunning(false) }
   }
-  const instructions = web ? challenge.runtime === 'css' ? 'Style the sample .card containing a heading, email input, and button. Run code to preview your CSS.' : challenge.runtime === 'jsx' ? 'Define an App component in JSX. React is provided; the preview renders its initial markup.' : 'Write HTML and run code to preview it. Scripts are disabled in previews.' : stdin ? 'Write a complete program and print your answer to standard output.' : challenge.runtime === 'sql' ? 'Write a SQLite query. Edit the sales rows in the JSON input below.' : challenge.runtime === 'mongodb' ? 'Enter a MongoDB JSON aggregation pipeline. Edit the sample documents below.' : 'Define solve(input) and return a value. Edit the JSON input below to try different examples.'
+  const instructions = web ? challenge.runtime === 'css' ? 'Style the sample .card containing a heading, email input, and button. Run code to preview your CSS.' : challenge.runtime === 'jsx' ? 'Define an App component in JSX. React is provided; the preview renders its initial markup.' : 'Write HTML and run code to preview it. Scripts are disabled in previews.' : stdin ? 'Write a complete program and print your answer to standard output.' : challenge.runtime === 'sql' ? 'Write a SQLite query. Edit the sales rows in the JSON input below.' : challenge.runtime === 'mongodb' ? 'Enter a MongoDB JSON aggregation pipeline. Edit the sample documents below.' : 'JavaScript: use console.log() to print output; JSON input is available as input. Python: use print() to print output. You can also define solve(input) and return a value.'
   return <main className="coding-hub coding-playground">
     <button className="coding-back" onClick={onBack} disabled={running}><ArrowLeft size={18} />Coding Practice</button>
     <div className="coding-hub-heading"><div><p className="eyebrow">Make room for practice</p><h1>Coding Playground</h1><p>Write freely, run your code, and save your draft.</p></div><button className="button button-quiet" onClick={save}><Save size={16} />Save code</button></div>

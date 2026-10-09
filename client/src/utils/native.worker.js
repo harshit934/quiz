@@ -10,6 +10,24 @@ self.onmessage = async ({ data }) => {
       self.postMessage({ ready: true })
       py.globals.set('learner_code', code)
       py.globals.set('fixtures_json', JSON.stringify(testCases))
+      if (data.playground) {
+        const output = await py.runPythonAsync(`import json, io, contextlib
+namespace = {'__name__': '__main__'}
+printed = io.StringIO()
+results = []
+with contextlib.redirect_stdout(printed), contextlib.redirect_stderr(printed):
+    exec(learner_code, namespace)
+    if callable(namespace.get('solve')):
+        actual = namespace['solve'](json.loads(fixtures_json)[0]['input'])
+        if actual is not None:
+            results.append({'name': 'Return value', 'actual': actual})
+if printed.getvalue():
+    results.insert(0, {'name': 'Printed output', 'actual': printed.getvalue()})
+if not results:
+    results.append({'name': 'Output', 'actual': 'Program finished without output. Use print() to print a value.'})
+json.dumps(results, allow_nan=False)`)
+        self.postMessage({ results: JSON.parse(output) }); return
+      }
       const output = await py.runPythonAsync(`import json
 namespace = {}
 exec(learner_code, namespace)

@@ -27,6 +27,10 @@ test('coding runner executes, scores, reports errors and terminates runaway code
   globalThis.Worker = BrowserWorker
   const cases = [{ name: 'Double', input: 3, expected: 6 }, { name: 'Zero', input: 0, expected: 0 }]
   try {
+    assert.deepEqual(await runCodingCases('console.log("Hello"); console.log(input);', [{name: 'Output', input: [1, 2], expected: null}], 3000, true), [{name: 'Printed output', actual: 'Hello\n[1,2]'}])
+    assert.deepEqual(await runCodingCases('function solve(n) { console.log("running"); return n * 2 }', cases, 3000, true), [{name: 'Printed output', actual: 'running'}, {name: 'Return value', actual: 6}])
+    assert.match((await runCodingCases('const n = 1;', cases, 3000, true))[0].actual, /without output/)
+    await assert.rejects(runCodingCases('while (true) {}', cases, 150, true), /timed out/)
     assert.deepEqual((await runCodingCases('function solve(n) { return n * 2 }', cases)).map(item => item.passed), [true, true])
     assert.deepEqual((await runCodingCases('function solve() { return 0 }', cases)).map(item => item.passed), [false, true])
     await assert.rejects(runCodingCases('function solve( {', cases), /Unexpected/)

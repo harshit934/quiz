@@ -46,7 +46,7 @@ function domRun(challenge, code) {
 }
 
 export async function runSubjectChallenge(challenge, code, phase = () => {}) {
-  if (challenge.runtime === 'javascript') return { results: await runCodingCases(code, challenge.testCases) }
+  if (challenge.runtime === 'javascript') return { results: await runCodingCases(code, challenge.testCases, 3000, challenge.playground) }
   if (['html', 'css'].includes(challenge.runtime)) return domRun(challenge, code)
   if (['java', 'bash', 'nodejs'].includes(challenge.runtime)) {
     phase('Contacting configured compiler…')
@@ -59,6 +59,6 @@ export async function runSubjectChallenge(challenge, code, phase = () => {}) {
     if (!response.ok) throw new Error(data.message || 'Compiler unavailable.')
     return data
   }
-  const output = await workerRun({ runtime: challenge.runtime, code, testCases: challenge.testCases }, phase)
+  const output = await workerRun({ runtime: challenge.runtime, code, testCases: challenge.testCases, playground: challenge.playground }, phase)
   return challenge.runtime === 'jsx' ? domRun(challenge, output.html) : output
 }
