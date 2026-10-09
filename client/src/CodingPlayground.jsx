@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Play, RotateCcw, Save } from 'lucide-react'
 import { generateCodingChallenge } from '../../shared/generateCodingChallenge.js'
 import { runSubjectChallenge } from './utils/subjectRunner.js'
-import { readPlaygroundDraft, savePlaygroundDraft } from './utils/playgroundDraft.js'
+import { readPlaygroundDraft, readPlaygroundLanguage, savePlaygroundDraft } from './utils/playgroundDraft.js'
 import './coding.css'
 
 const languages = [['javascript', 'JavaScript'], ['python', 'Python'], ['html', 'HTML'], ['css', 'CSS'], ['react', 'React JSX'], ['sql', 'SQL'], ['mongodb', 'MongoDB query (JSON)'], ['java', 'Java'], ['node-js', 'Node.js'], ['cloud-computing', 'Bash']]
@@ -20,8 +20,11 @@ const defaults = {
 }
 
 export default function CodingPlayground({ user, onBack }) {
-  const [language, setLanguage] = useState('javascript')
   const account = user?._id || user?.id
+  const [language, setLanguage] = useState(() => {
+    try { return readPlaygroundLanguage(window.localStorage, account, languages.map(([id]) => id)) }
+    catch { return 'javascript' }
+  })
   return <PlaygroundEditor key={`${account}-${language}`} account={account} language={language} onLanguage={setLanguage} onBack={onBack} />
 }
 
@@ -42,7 +45,13 @@ function PlaygroundEditor({ account, language, onLanguage, onBack }) {
   const web = ['html', 'css', 'jsx'].includes(challenge.runtime)
   const stdin = ['java', 'bash'].includes(challenge.runtime)
   function edit(setter, value) { setter(value); setMessage('Unsaved changes'); setError(''); setOutput(null); setPreview('') }
-  function save() { setMessage(savePlaygroundDraft(window.localStorage, key, { code, input }) ? 'Code and input saved in this browser.' : 'Unable to save. Copy your code to keep it.') }
+  function save() {
+    try {
+      if (!savePlaygroundDraft(window.localStorage, key, { code, input })) throw new Error('Save failed')
+      window.localStorage.setItem(`quizly-playground-${account}-language`, language)
+      setMessage('Code and input saved in this browser. This language will reopen next time.')
+    } catch { setMessage('Unable to save. Copy your code to keep it.') }
+  }
   async function run() {
     if (running) return
     setRunning(true); setError(''); setOutput(null); setPreview('')
