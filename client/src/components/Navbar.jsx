@@ -47,7 +47,7 @@ export default function Navbar({
     <header className={`site-header ${isAdmin ? 'admin-site-header' : ''}`}>
       <div className="nav-inner">
         <button className="brand" onClick={() => go(isAdmin ? '#admin/dashboard' : '#home')} aria-label="Quizly home">
-          <span className="brand-mark"><BookOpenCheck size={18} /></span><span>quizly<span className="brand-period">.</span></span>
+          <img className="brand-logo" src="/quizly-logo.svg" alt="" width="38" height="38" /><span>quizly<span className="brand-period">.</span></span>
         </button>
         <nav className={`main-nav ${isAdmin ? 'admin-main-nav' : ''} ${menuOpen ? 'nav-open' : ''}`} aria-label="Main navigation">
           {links.map(({ label, route: target, icon: Icon }) => (
