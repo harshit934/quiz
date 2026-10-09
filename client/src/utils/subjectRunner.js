@@ -1,4 +1,5 @@
 import { runCodingCases } from './codingRunner.js'
+import { compilerLanguageIds } from '../../../shared/playgroundLanguages.js'
 
 function workerRun(data, phase) {
   return new Promise((resolve, reject) => {
@@ -48,12 +49,12 @@ function domRun(challenge, code) {
 export async function runSubjectChallenge(challenge, code, phase = () => {}) {
   if (challenge.runtime === 'javascript') return { results: await runCodingCases(code, challenge.testCases, 3000, challenge.playground) }
   if (['html', 'css'].includes(challenge.runtime)) return domRun(challenge, code)
-  if (['java', 'bash', 'nodejs'].includes(challenge.runtime)) {
+  if (Object.hasOwn(compilerLanguageIds, challenge.runtime)) {
     phase('Contacting configured compiler…')
     const token = localStorage.getItem('quizly-token')
     const response = await fetch(`${(import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')}/api/coding/run`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ runtime: challenge.runtime, code, testCases: challenge.testCases }), signal: AbortSignal.timeout(90000),
+      body: JSON.stringify({ runtime: challenge.runtime, code, testCases: challenge.testCases, playground: Boolean(challenge.playground) }), signal: AbortSignal.timeout(90000),
     })
     const data = await response.json().catch(() => ({ message: 'Compiler API unavailable. Deploy the updated API and configure JUDGE0_URL to run this language.' }))
     if (!response.ok) throw new Error(data.message || 'Compiler unavailable.')

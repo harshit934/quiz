@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readPlaygroundDraft, readPlaygroundLanguage, savePlaygroundDraft } from './playgroundDraft.js'
+import { readPlaygroundDraft, readPlaygroundLanguage, savePlaygroundDraft, readNamedPrograms, saveNamedProgram } from './playgroundDraft.js'
 test('playground save restores exact code and input without mixing accounts or languages', () => {
   const data = new Map()
   const storage = { getItem: key => data.get(key) || null, setItem: (key, value) => data.set(key, value) }
@@ -35,4 +35,21 @@ test('reopening selects the saved language and restores its draft for the same a
 test('save does not report success when storage silently drops the write', () => {
   const storage = { getItem: () => null, setItem: () => {} }
   assert.equal(savePlaygroundDraft(storage, 'key', { code: 'saved', input: '' }), false)
+})
+
+test('named programs retain multiple files, update by ID and isolate accounts', () => {
+  const data = new Map()
+  const storage = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) }
+  const program = { name: 'Hello', language: 'c', code: 'int main() {}', input: '42' }
+  const first = saveNamedProgram(storage, 'alice', program)
+  const second = saveNamedProgram(storage, 'alice', { ...program, name: 'Loops' })
+  assert.notEqual(first.id, second.id)
+  assert.equal(readNamedPrograms(storage, 'alice').length, 2)
+  saveNamedProgram(storage, 'alice', { ...first, code: 'updated', name: 'Renamed' })
+  assert.equal(readNamedPrograms(storage, 'alice').length, 2)
+  assert.equal(readNamedPrograms(storage, 'alice').find(item => item.id === first.id).code, 'updated')
+  assert.deepEqual(readNamedPrograms(storage, 'bob'), [])
+  assert.throws(() => saveNamedProgram(storage, 'alice', { ...program, name: ' loops ' }), /already used/)
+  assert.throws(() => saveNamedProgram(storage, 'alice', { ...program, name: ' ' }), /program name/)
+  assert.throws(() => saveNamedProgram({ setItem() {}, getItem() { return null } }, 'alice', program), /Unable to save/)
 })

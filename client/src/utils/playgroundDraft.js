@@ -19,3 +19,24 @@ export function readPlaygroundLanguage(storage, account, languages) {
     return languages.includes(saved) ? saved : 'javascript'
   } catch { return 'javascript' }
 }
+
+export function readNamedPrograms(storage, account) {
+  try {
+    const programs = JSON.parse(storage.getItem(`quizly-playground-${account}-programs`))
+    return Array.isArray(programs) ? programs.filter(item => item && ['id', 'name', 'language', 'code', 'input'].every(key => typeof item[key] === 'string')) : []
+  } catch { return [] }
+}
+
+export function saveNamedProgram(storage, account, program) {
+  const name = program.name.trim()
+  if (!name || name.length > 80) throw new Error('Enter a program name between 1 and 80 characters.')
+  const programs = readNamedPrograms(storage, account)
+  const existing = programs.find(item => item.language === program.language && item.name.toLowerCase() === name.toLowerCase())
+  if (existing && existing.id !== program.id) throw new Error('That name is already used for this language. Choose another name or open the existing program.')
+  const saved = { ...program, name, id: program.id || crypto.randomUUID(), updatedAt: new Date().toISOString() }
+  const next = [saved, ...programs.filter(item => item.id !== saved.id)]
+  storage.setItem(`quizly-playground-${account}-programs`, JSON.stringify(next))
+  const restored = readNamedPrograms(storage, account).find(item => item.id === saved.id)
+  if (!restored || restored.code !== saved.code || restored.input !== saved.input) throw new Error('Unable to save. Copy your code to keep it.')
+  return saved
+}

@@ -6,7 +6,7 @@ import { runCompiler, validCompilerRequest } from '../services/compiler.js'
 const router = Router()
 router.get('/status', (req, res) => res.json({ configured: Boolean(process.env.JUDGE0_URL) }))
 router.post('/run', rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: 'draft-7', legacyHeaders: false }), (req, res, next) => {
-  if (!process.env.JUDGE0_URL) return res.status(503).json({ message: 'Compiler service is not configured. Set JUDGE0_URL on the API server to enable Java, Node.js and Bash.' })
+  if (!process.env.JUDGE0_URL) return res.status(503).json({ message: 'Running this language requires compiler setup. You can still write and save your program. Set JUDGE0_URL on the API server to enable compiled languages.' })
   next()
 }, authenticate, async (req, res, next) => {
   if (!validCompilerRequest(req.body)) return res.status(400).json({ message: 'Invalid runtime, code or test cases.' })
