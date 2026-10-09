@@ -7,6 +7,7 @@ import { generateCodingChallenge, nextCodingAttempt } from '../../shared/generat
 import { codingScore, readCodingProgress, writeCodingProgress, readCodingDraft } from './utils/codingProgress.js'
 import './coding.css'
 import { codingMinutes, timedChallenge, remainingSeconds, clockLabel } from './utils/codingTimer.js'
+import { readPracticeMistakes, updatePracticeMistakes, writePracticeMistakes } from './utils/practiceMistakes.js'
 
 const subjects = codingChallenges.filter(item => item.difficulty === 'Easy')
 const display = value => JSON.stringify(value, null, 2)
@@ -18,6 +19,14 @@ export default function CodingPage({ user, onPlayground }) {
   const [challenge, setChallenge] = useState(null)
   const storageKey = `quizly-coding-progress-${user?.id || user?._id || 'guest'}`
   const [progress, setProgress] = useState(() => readCodingProgress(window.localStorage, storageKey))
+  const [mistakes, setMistakes] = useState(() => readPracticeMistakes(window.localStorage, storageKey))
+  const [review, setReview] = useState(null)
+  const [mistakeNotice, setMistakeNotice] = useState('')
+  function recordMistake(attempt, code, results) {
+    const updated = updatePracticeMistakes(mistakes, attempt, code, results)
+    setMistakes(updated)
+    setMistakeNotice(writePracticeMistakes(window.localStorage, storageKey, updated) ? '' : 'Mistake history could not be saved. Keep this page open or copy your code.')
+  }
   function updateProgress(next) {
     setProgress(current => {
       const updated = { ...current, [`${next.subjectId}-${next.difficulty}`]: next }
@@ -33,7 +42,7 @@ export default function CodingPage({ user, onPlayground }) {
   const rows = codingChallenges.filter(item => item.subjectId === subject && (difficulty === 'All' || item.difficulty === difficulty))
   const draft = readCodingDraft(window.localStorage, storageKey)
   const savedDraft = draft?.challenge.runtime === subjectLanguages[draft?.challenge.subjectId]?.runtime ? draft : null
-  if (challenge) return <CodingExercise key={challenge.id} challenge={challenge} onBack={() => setChallenge(null)} onNewAttempt={() => openQuestion(challenge.difficulty)} onProgress={updateProgress} storageKey={storageKey} />
+  if (challenge) return <CodingExercise key={challenge.id} challenge={challenge} onBack={() => setChallenge(null)} onNewAttempt={() => openQuestion(challenge.difficulty)} onProgress={updateProgress} onMistake={recordMistake} mistakeNotice={mistakeNotice} storageKey={storageKey} />
   return <main className="coding-hub">
     <div className="coding-breadcrumb"><Code2 size={19} /><span>Technology › <strong>Coding Practice</strong></span></div>
     <div className="coding-hub-heading"><div><p className="eyebrow">Learn by building</p><h1>Coding Practice</h1><p>Choose a challenge. Write your solution. Pass every test.</p></div><div className="coding-hub-actions"><span className="coding-library-count">18 subjects · 3 levels</span><button className="button button-primary" onClick={onPlayground}><Code2 size={16} />Open playground</button></div></div>
@@ -55,10 +64,25 @@ export default function CodingPage({ user, onPlayground }) {
       </tr>
     })}</tbody></table></div>
     <p className="coding-local-note">Easy: 15 minutes · Medium: 30 minutes · Hard: 45 minutes. The timer starts when you open a question. Practice scores stay in this browser.</p>
+    <section className="practice-mistakes" aria-label="Practice mistakes">
+      <h2>Practice mistakes ({mistakes.filter(item => !item.resolved).length} to retry)</h2>
+      <p>Review failed coding attempts and retry the same question with a fresh timer. Your latest 50 mistakes stay in this browser for this account.</p>
+      {mistakeNotice && <p role="alert">{mistakeNotice}</p>}
+      {!mistakes.length && <p>No mistakes recorded yet. Failed test runs will appear here.</p>}
+      {mistakes.map(item => <article className="practice-mistake" key={item.challenge.id}>
+        <strong>{item.challenge.title}</strong><p>{item.challenge.subject} · {item.challenge.difficulty} · {item.resolved ? 'Resolved' : `${item.results.filter(result => !result.passed).length} failed cases`}</p>
+        <button className="button button-quiet" onClick={() => setReview(review === item.challenge.id ? null : item.challenge.id)}>{review === item.challenge.id ? 'Hide details' : 'Review mistakes'}</button>{' '}
+        <button className="button button-primary" onClick={() => { setSubject(item.challenge.subjectId); setChallenge(timedChallenge({ ...item.challenge, draft: item.code })) }}>Retry question</button>
+        {review === item.challenge.id && <div><h3>Your saved code</h3><pre className="coding-reference">{item.code}</pre><h3>Failed test results</h3>{item.results.filter(result => !result.passed).map((result, index) => {
+          const test = item.challenge.testCases.find(test => test.name === result.name)
+          return <div key={index}><strong>{result.name}</strong>{test && <><p>Input / assertion</p><pre className="coding-reference">{display(test.assertion ?? test.input ?? test.stdin)}</pre><p>Expected</p><pre className="coding-reference">{display(test.assertion ?? test.expected)}</pre></>}<p>Actual / error</p><pre className="coding-reference">{result.error || display(result.actual)}</pre></div>
+        })}</div>}
+      </article>)}
+    </section>
   </main>
 }
 
-function CodingExercise({ challenge, onNewAttempt, onBack, onProgress, storageKey }) {
+function CodingExercise({ challenge, onNewAttempt, onBack, onProgress, onMistake, mistakeNotice, storageKey }) {
   const [deadline] = useState(() => timedChallenge(challenge).deadline)
   const [seconds, setSeconds] = useState(() => remainingSeconds(deadline))
   const expired = seconds === 0
@@ -105,14 +129,16 @@ function CodingExercise({ challenge, onNewAttempt, onBack, onProgress, storageKe
       const next = output.results
       if (active.current && remainingSeconds(deadline) > 0) {
         setResults(next); setPreview(output.preview || '')
+        onMistake(challenge, code, next)
         const count = next.filter(item => item.passed).length
         report({ status: count === next.length ? 'Completed' : 'In progress', passed: count, tested: true, score: codingScore(count, next.length, challenge.difficulty) })
       }
     } catch (failure) {
-      if (active.current && remainingSeconds(deadline) > 0) { setError(failure.message); report({ status: 'In progress', passed: 0, score: 0, tested: true }) }
+      if (active.current && remainingSeconds(deadline) > 0) { setError(failure.message); onMistake(challenge, code, [{ name: 'Execution error', passed: false, error: failure.message }]); report({ status: 'In progress', passed: 0, score: 0, tested: true }) }
     } finally { if (active.current) setRunning(false) }
   }
   return <main className={`coding-workspace ${maximized ? 'coding-workspace-maximized' : ''}`}>
+    {mistakeNotice && <p role="alert">{mistakeNotice}</p>}
     <div className="coding-workspace-heading"><button className="coding-back" onClick={onBack} disabled={running}><ArrowLeft size={20} /> Coding Practice</button><div className="coding-exam-clock" role="timer" aria-label="Time remaining"><strong>{clockLabel(seconds)}</strong><span>{expired ? 'Time expired' : `${codingMinutes[challenge.difficulty]} minute attempt`}</span></div><button className="button button-quiet" onClick={onNewAttempt} disabled={running}>New attempt <ArrowRight size={15} /></button></div>
     <>{expired && <p className="coding-time-expired" role="alert">Time is up. Your code has been saved. Start a new attempt to try again.</p>}</><div className="coding-workspace-grid">
       <section className="coding-description-panel">

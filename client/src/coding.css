@@ -134,3 +134,6 @@
 .playground-saved-list .program-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .program-delete { color: var(--red, #b83c3c); }
 @media (max-width: 600px) { .playground-saved-list article { flex-wrap: wrap; } .playground-saved-list .program-actions { width: 100%; justify-content: flex-start; } .coding-playground .coding-run-bar { flex-wrap: wrap; } }
+.practice-mistakes { margin-top: 32px; }
+.practice-mistake { padding: 20px; margin: 12px 0; border: 1px solid var(--border, #ddd); border-radius: 12px; }
+.practice-mistake pre { max-height: 280px; overflow: auto; }
