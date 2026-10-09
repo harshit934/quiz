@@ -97,7 +97,7 @@ export function HomePage({ categories, quizzes, stats, user, onExplore, onStart,
       </section>
 
       {!user && <section className="closing-cta page-width"><div className="closing-glyph"><Sparkles size={21} /></div><div><p className="eyebrow">Your next good habit</p><h2>Make room for one more thing you know.</h2><p className="muted">Keep your progress, revisit results, and see what you are getting better at.</p></div><button className="button button-primary" onClick={onRegister}>Create a free account <ArrowRight size={16} /></button></section>}
-      <footer className="site-footer page-width"><span>quizly<span className="brand-period">.</span> <span className="muted">Practice with purpose.</span></span><span className="muted">Built for curious people.</span></footer>
+      <footer className="site-footer page-width"><span>QUIZLY<span className="brand-period">.</span> <span className="muted">Practice with purpose.</span></span><span className="muted">Built for curious people.</span></footer>
     </main>
   )
 }
