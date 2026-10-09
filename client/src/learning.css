@@ -1,0 +1,12 @@
+.learning-panel { margin: 24px 0; padding: 24px; border: 1px solid var(--border, #c9c5bb); border-radius: 16px; }
+.learning-heading, .learning-bookmark { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.learning-plan { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin: 20px 0; }
+.learning-panel select { display: block; margin-top: 8px; padding: 8px; color: inherit; background: var(--surface, transparent); }
+.learning-panel h3 { margin-top: 24px; }
+.learning-mistake, .learning-bookmark { border-top: 1px solid var(--border, #c9c5bb); padding: 16px 0; }
+.learning-mistake summary { cursor: pointer; font-weight: 600; }
+.learning-mistake fieldset { margin: 16px 0; padding: 16px; }
+.learning-mistake fieldset label { display: block; margin: 12px 0; }
+.learning-mistake input { margin-right: 8px; }
+.coding-hints { margin: 16px 0; padding: 16px; border: 1px solid var(--border, #c9c5bb); border-radius: 12px; }
+@media (max-width: 600px) { .learning-plan { grid-template-columns: 1fr; } .learning-panel { padding: 16px; } }

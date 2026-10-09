@@ -13,6 +13,7 @@ import examRoutes from './routes/exams.js'
 import leaderboardRoutes from './routes/leaderboard.js'
 import adminRoutes from './routes/admin.js'
 import codingRoutes from './routes/coding.js'
+import learningRoutes from './routes/learning.js'
 
 import User from './models/User.js'
 import Quiz from './models/Quiz.js'
@@ -130,6 +131,7 @@ app.get('/api/health', (req, res) => {
  * MongoDB connection.
  */
 app.use('/api/coding', codingRoutes)
+app.use('/api/learning', learningRoutes)
 
 app.use('/api', (req, res, next) => {
   if (

@@ -13,6 +13,7 @@ import AdminQuestionsPage from './AdminQuestionsPage.jsx'
 import AdminExamsPage from './AdminExamsPage.jsx'
 import ExamsPage from './ExamsPage.jsx'
 import AuthenticatedCoding from './AuthenticatedCoding.jsx'
+import LearningProvider from './LearningContext.jsx'
 import { exploreRoute } from './utils/exploreRoute.js'
 import { LoadingState, Toast } from './components/ui.jsx'
 import { demoCategories, demoQuizzes } from './data/demoData.js'
@@ -1478,7 +1479,7 @@ export default function App() {
     content = !isAuthenticated ? (
       <LoadingState label="Opening login" />
     ) : (
-      <AuthenticatedCoding user={user} playground={routeId === 'playground'} navigate={navigate} onExpired={() => {
+      <AuthenticatedCoding user={user} bookmarkId={routeId === 'bookmark' ? routeParts[2] : null} playground={routeId === 'playground'} navigate={navigate} onExpired={() => {
         clearToken()
         localStorage.removeItem('quizly-user')
         setUser(null)
@@ -1625,7 +1626,7 @@ export default function App() {
     adminVerified
 
   return (
-    <div className="app-shell">
+    <LearningProvider key={isAuthenticated ? user?.id || user?._id : 'guest'} user={isAuthenticated ? user : null}><div className="app-shell">
       {!immersive && (
         <Navbar
           user={user}
@@ -1658,7 +1659,7 @@ export default function App() {
           setToast('')
         }
       />
-    </div>
+    </div></LearningProvider>
   )
 }
 

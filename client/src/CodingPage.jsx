@@ -8,24 +8,41 @@ import { codingScore, readCodingProgress, writeCodingProgress, readCodingDraft }
 import './coding.css'
 import { codingMinutes, timedChallenge, remainingSeconds, clockLabel } from './utils/codingTimer.js'
 import { readPracticeMistakes, updatePracticeMistakes, writePracticeMistakes } from './utils/practiceMistakes.js'
+import { useLearning } from './LearningContext.jsx'
+import LearningPanel, { BookmarkButton } from './LearningPanel.jsx'
+import { dayKey } from '../../shared/learningState.js'
+import { codingHints } from './utils/codingHints.js'
 
 const subjects = codingChallenges.filter(item => item.difficulty === 'Easy')
 const display = value => JSON.stringify(value, null, 2)
 const limits = { Easy: 40, Medium: 60, Hard: 100 }
 
-export default function CodingPage({ user, onPlayground }) {
+export default function CodingPage({ user, onPlayground, bookmarkId }) {
+  const learning = useLearning()
   const [subject, setSubject] = useState(subjects[0].subjectId)
   const [difficulty, setDifficulty] = useState('All')
   const [challenge, setChallenge] = useState(null)
   const storageKey = `quizly-coding-progress-${user?.id || user?._id || 'guest'}`
-  const [progress, setProgress] = useState(() => readCodingProgress(window.localStorage, storageKey))
-  const [mistakes, setMistakes] = useState(() => readPracticeMistakes(window.localStorage, storageKey))
+  const [localProgress, setProgress] = useState(() => readCodingProgress(window.localStorage, storageKey))
+  const [localMistakes, setMistakes] = useState(() => readPracticeMistakes(window.localStorage, storageKey))
+  const progress = learning?.state.progress || localProgress
+  const mistakes = learning?.state.mistakes || localMistakes
   const [review, setReview] = useState(null)
   const [mistakeNotice, setMistakeNotice] = useState('')
+  const openedBookmark = useRef(null)
+  useEffect(() => {
+    const item = learning?.state.bookmarks[`coding-${bookmarkId}`]
+    if (!bookmarkId || !item?.challenge || openedBookmark.current === bookmarkId) return
+    openedBookmark.current = bookmarkId
+    setSubject(item.challenge.subjectId)
+    setChallenge(timedChallenge({ ...item.challenge, deadline: undefined, draft: undefined }))
+  }, [bookmarkId, learning?.state.bookmarks])
   function recordMistake(attempt, code, results) {
     const updated = updatePracticeMistakes(mistakes, attempt, code, results)
     setMistakes(updated)
     setMistakeNotice(writePracticeMistakes(window.localStorage, storageKey, updated) ? '' : 'Mistake history could not be saved. Keep this page open or copy your code.')
+    const count = results.filter(row => row.passed).length
+    learning?.dispatch('coding', { challenge: { ...attempt, draft: undefined, deadline: undefined }, code, results, day: dayKey(), progress: { subjectId: attempt.subjectId, difficulty: attempt.difficulty, total: attempt.testCases.length, passed: count, score: codingScore(count, attempt.testCases.length, attempt.difficulty), tested: true, status: count === attempt.testCases.length ? 'Completed' : 'In progress' } })
   }
   function updateProgress(next) {
     setProgress(current => {
@@ -63,10 +80,11 @@ export default function CodingPage({ user, onPlayground }) {
         <td><button className="coding-open" onClick={() => openQuestion(item.difficulty)} aria-label={`Start ${item.difficulty} ${item.subject} coding challenge`}><ArrowRight size={20} /></button></td>
       </tr>
     })}</tbody></table></div>
-    <p className="coding-local-note">Easy: 15 minutes · Medium: 30 minutes · Hard: 45 minutes. The timer starts when you open a question. Practice scores stay in this browser.</p>
+    <p className="coding-local-note">Easy: 15 minutes · Medium: 30 minutes · Hard: 45 minutes. The timer starts when you open a question. Scores and mistakes sync when your account is connected.</p>
+    <LearningPanel user={user} onQuiz={id => { window.location.hash = `#quiz/${id}` }} onCoding={saved => { setSubject(saved.subjectId); setChallenge(timedChallenge({ ...saved, deadline: undefined, draft: undefined })) }} />
     <section className="practice-mistakes" aria-label="Practice mistakes">
       <h2>Practice mistakes ({mistakes.filter(item => !item.resolved).length} to retry)</h2>
-      <p>Review failed coding attempts and retry the same question with a fresh timer. Your latest 50 mistakes stay in this browser for this account.</p>
+      <p>Review failed coding attempts and retry the same question with a fresh timer. Your latest 50 mistakes sync to your account, with a browser copy kept while offline.</p>
       {mistakeNotice && <p role="alert">{mistakeNotice}</p>}
       {!mistakes.length && <p>No mistakes recorded yet. Failed test runs will appear here.</p>}
       {mistakes.map(item => <article className="practice-mistake" key={item.challenge.id}>
@@ -95,6 +113,7 @@ function CodingExercise({ challenge, onNewAttempt, onBack, onProgress, onMistake
   const [running, setRunning] = useState(false)
   const [tab, setTab] = useState('description')
   const [showSolution, setShowSolution] = useState(false)
+  const [hintCount, setHintCount] = useState(0)
   const [maximized, setMaximized] = useState(false)
   const [savedNotice, setSavedNotice] = useState('')
   const active = useRef(true), gutter = useRef(null), editor = useRef(null)
@@ -139,14 +158,14 @@ function CodingExercise({ challenge, onNewAttempt, onBack, onProgress, onMistake
   }
   return <main className={`coding-workspace ${maximized ? 'coding-workspace-maximized' : ''}`}>
     {mistakeNotice && <p role="alert">{mistakeNotice}</p>}
-    <div className="coding-workspace-heading"><button className="coding-back" onClick={onBack} disabled={running}><ArrowLeft size={20} /> Coding Practice</button><div className="coding-exam-clock" role="timer" aria-label="Time remaining"><strong>{clockLabel(seconds)}</strong><span>{expired ? 'Time expired' : `${codingMinutes[challenge.difficulty]} minute attempt`}</span></div><button className="button button-quiet" onClick={onNewAttempt} disabled={running}>New attempt <ArrowRight size={15} /></button></div>
+    <div className="coding-workspace-heading"><button className="coding-back" onClick={onBack} disabled={running}><ArrowLeft size={20} /> Coding Practice</button><BookmarkButton bookmarkKey={`coding-${challenge.id}`} item={{ kind: 'coding', title: challenge.title, challenge: { ...challenge, deadline: undefined, draft: undefined } }} /><div className="coding-exam-clock" role="timer" aria-label="Time remaining"><strong>{clockLabel(seconds)}</strong><span>{expired ? 'Time expired' : `${codingMinutes[challenge.difficulty]} minute attempt`}</span></div><button className="button button-quiet" onClick={onNewAttempt} disabled={running}>New attempt <ArrowRight size={15} /></button></div>
     <>{expired && <p className="coding-time-expired" role="alert">Time is up. Your code has been saved. Start a new attempt to try again.</p>}</><div className="coding-workspace-grid">
       <section className="coding-description-panel">
         <div className="coding-description-tabs" role="tablist" aria-label="Challenge information"><button id="description-tab" role="tab" aria-selected={tab === 'description'} aria-controls="coding-info" onClick={() => setTab('description')}><FileText size={18} /> Description</button><button id="help-tab" role="tab" aria-selected={tab === 'help'} aria-controls="coding-info" onClick={() => setTab('help')}><HelpCircle size={18} /> Get Help</button></div>
         <div className="coding-description-content" id="coding-info" role="tabpanel" aria-labelledby={tab === 'description' ? 'description-tab' : 'help-tab'}>
           <div className="coding-title-row"><h1>{challenge.title}</h1><span className={`coding-status coding-status-${results && passed === results.length ? 'complete' : 'progress'}`}><i />{expired ? 'Time expired' : results && passed === results.length ? 'Completed' : 'In progress'}</span></div>
           <span className={`coding-level coding-level-${challenge.difficulty.toLowerCase()}`}>{challenge.difficulty}</span>
-          {tab === 'description' ? <><p className="coding-task-description">{challenge.description}</p><h2>Your task</h2><p>{challenge.instructions}</p><h2>Sample test cases</h2><TestCases challenge={challenge} results={results} /></> : <><h2>How to solve this challenge</h2><ol className="coding-help-list"><li>Read the requirements for this attempt.</li><li>Inspect each input and expected output.</li><li>{challenge.instructions}</li><li>Run test cases and revise any failing output.</li></ol><p>Use Tab to indent and Ctrl+Enter to run. Code execution stops after three seconds, after the language runtime loads.</p><button className="button button-quiet" onClick={() => setShowSolution(value => !value)}>{showSolution ? 'Hide' : 'Show'} reference solution</button>{showSolution && <pre className="coding-reference">{challenge.solution}</pre>}</>}
+          {tab === 'description' ? <><p className="coding-task-description">{challenge.description}</p><h2>Your task</h2><p>{challenge.instructions}</p><h2>Sample test cases</h2><TestCases challenge={challenge} results={results} /></> : <><h2>Hints</h2><p>Try one clue at a time before revealing the solution.</p><ol className="coding-help-list">{codingHints(challenge).slice(0, hintCount).map((hint, index) => <li key={index}>{hint}</li>)}</ol><button className="button button-quiet" disabled={hintCount === 3} onClick={() => setHintCount(count => count + 1)}>{hintCount === 3 ? 'All hints revealed' : `Show hint ${hintCount + 1}`}</button><p>Use Tab to indent and Ctrl+Enter to run. Code execution stops after three seconds, after the language runtime loads.</p><button className="button button-quiet" disabled={hintCount < 3} onClick={() => setShowSolution(value => !value)}>{showSolution ? 'Hide' : 'Show'} reference solution</button>{hintCount < 3 && <p>Reveal the three hints to unlock the reference solution.</p>}{showSolution && <pre className="coding-reference">{challenge.solution}</pre>}</>}
         </div>
         <div className="coding-description-footer"><Code2 size={17} />{challenge.subject}<span>Practice · {limits[challenge.difficulty]} points</span></div>
       </section>
