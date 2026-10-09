@@ -29,10 +29,10 @@ export default function CodingPlayground({ user, onBack }) {
   })
   const [opened, setOpened] = useState(() => readNamedPrograms(window.localStorage, account).find(item => item.language === language) || null)
   const [openVersion, setOpenVersion] = useState(0)
-  return <PlaygroundEditor key={`${account}-${language}-${openVersion}`} account={account} language={language} opened={opened} onOpen={program => { setLanguage(program.language); setOpened(program); setOpenVersion(value => value + 1) }} onLanguage={value => { setOpened(readNamedPrograms(window.localStorage, account).find(item => item.language === value) || null); setLanguage(value) }} onBack={onBack} />
+  return <PlaygroundEditor key={`${account}-${language}-${openVersion}`} account={account} language={language} opened={opened} focusEditor={openVersion > 0} onOpen={program => { setLanguage(program.language); setOpened(program); setOpenVersion(value => value + 1) }} onLanguage={value => { setOpened(readNamedPrograms(window.localStorage, account).find(item => item.language === value) || null); setLanguage(value); setOpenVersion(0) }} onBack={onBack} />
 }
 
-function PlaygroundEditor({ account, language, opened, onOpen, onLanguage, onBack }) {
+function PlaygroundEditor({ account, language, opened, focusEditor, onOpen, onLanguage, onBack }) {
   const compiled = compilerLanguages.find(([id]) => id === (language === 'node-js' ? 'nodejs' : language === 'cloud-computing' ? 'bash' : language))
   const challenge = compiled ? { runtime: compiled[0], language: compiled[1], badge: compiled[1].slice(0, 3) } : generateCodingChallenge(language, 'Easy', 1)
   const key = `quizly-playground-${account}-${challenge.runtime}`
@@ -49,6 +49,13 @@ function PlaygroundEditor({ account, language, opened, onOpen, onLanguage, onBac
   const [preview, setPreview] = useState('')
   const [error, setError] = useState('')
   const active = useRef(true)
+  const editor = useRef(null)
+  useEffect(() => {
+    if (focusEditor && editor.current) {
+      editor.current.focus({ preventScroll: true })
+      editor.current.scrollIntoView({ block: 'center', behavior: 'instant' })
+    }
+  }, [focusEditor])
   useEffect(() => { active.current = true; return () => { active.current = false } }, [])
   const web = ['html', 'css', 'jsx'].includes(challenge.runtime)
   const stdin = Boolean(compiled)
@@ -95,8 +102,8 @@ function PlaygroundEditor({ account, language, opened, onOpen, onLanguage, onBac
     <p className="muted">{instructions}</p>
     {compiled && <p className="muted">You can write and save {challenge.language} programs now. Running this language requires compiler setup.</p>}
     <section className="coding-editor-panel" aria-label="Playground editor">
-      <div className="coding-language-bar"><span className="coding-js-logo">{challenge.badge}</span><strong>{challenge.language}</strong><button className="icon-button" aria-label="Reset playground code" disabled={running} onClick={() => { edit(setCode, defaults[language][0]); setInput(defaults[language][1]) }}><RotateCcw size={18} /></button></div>
-      <label className="sr-only" htmlFor="playground-code">{challenge.language} playground editor</label><textarea id="playground-code" className="coding-code-input playground-code" value={code} disabled={running} spellCheck={false} onChange={event => edit(setCode, event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); run() } }} />
+      <div className="coding-language-bar"><span className="coding-js-logo">{challenge.badge}</span><strong>{challenge.language}{programName ? ` · ${programName}` : ''}</strong><button className="icon-button" aria-label="Reset playground code" disabled={running} onClick={() => { edit(setCode, defaults[language][0]); setInput(defaults[language][1]) }}><RotateCcw size={18} /></button></div>
+      <label className="sr-only" htmlFor="playground-code">{challenge.language} playground editor</label><textarea ref={editor} id="playground-code" className="coding-code-input playground-code" value={code} disabled={running} spellCheck={false} onChange={event => edit(setCode, event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); run() } }} />
       <div className="coding-run-bar"><span aria-live="polite">{running ? phase : '3-second execution limit · Ctrl+Enter to run'}</span><button className="button button-primary" disabled={running} onClick={run}><Play size={16} />{running ? 'Running…' : 'Run code'}</button></div>
     </section>
     {!web && <label className="playground-input-label" htmlFor="playground-input">{stdin ? 'Standard input' : 'JSON input'}<textarea id="playground-input" value={input} disabled={running} spellCheck={false} onChange={event => edit(setInput, event.target.value)} /></label>}
