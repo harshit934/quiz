@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readPlaygroundDraft, readPlaygroundLanguage, savePlaygroundDraft, readNamedPrograms, saveNamedProgram } from './playgroundDraft.js'
+import { readPlaygroundDraft, readPlaygroundLanguage, savePlaygroundDraft, readNamedPrograms, saveNamedProgram, listSavedPrograms } from './playgroundDraft.js'
 test('playground save restores exact code and input without mixing accounts or languages', () => {
   const data = new Map()
   const storage = { getItem: key => data.get(key) || null, setItem: (key, value) => data.set(key, value) }
@@ -52,4 +52,20 @@ test('named programs retain multiple files, update by ID and isolate accounts', 
   assert.throws(() => saveNamedProgram(storage, 'alice', { ...program, name: ' loops ' }), /already used/)
   assert.throws(() => saveNamedProgram(storage, 'alice', { ...program, name: ' ' }), /program name/)
   assert.throws(() => saveNamedProgram({ setItem() {}, getItem() { return null } }, 'alice', program), /Unable to save/)
+})
+
+test('saved program library exposes older drafts without duplicating named programs', () => {
+  const data = new Map()
+  const storage = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) }
+  const languages = [['python', 'Python'], ['react', 'React JSX']]
+  savePlaygroundDraft(storage, 'quizly-playground-alice-python', { code: 'print("old")', input: '' })
+  savePlaygroundDraft(storage, 'quizly-playground-alice-jsx', { code: 'function App() {}', input: '' })
+  const recovered = listSavedPrograms(storage, 'alice', languages)
+  assert.equal(recovered.length, 2)
+  assert.equal(recovered[0].name, 'Saved Python draft')
+  assert.equal(recovered[1].language, 'react')
+  assert.deepEqual(listSavedPrograms(storage, 'bob', languages), [])
+  saveNamedProgram(storage, 'alice', { ...recovered[0], name: 'My Python' })
+  assert.equal(listSavedPrograms(storage, 'alice', languages).length, 2)
+  assert.equal(listSavedPrograms(storage, 'alice', languages)[0].name, 'My Python')
 })

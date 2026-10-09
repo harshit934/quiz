@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Play, RotateCcw, Save } from 'lucide-react'
 import { generateCodingChallenge } from '../../shared/generateCodingChallenge.js'
 import { runSubjectChallenge } from './utils/subjectRunner.js'
-import { readPlaygroundDraft, readPlaygroundLanguage, savePlaygroundDraft, readNamedPrograms, saveNamedProgram } from './utils/playgroundDraft.js'
+import { readPlaygroundDraft, readPlaygroundLanguage, savePlaygroundDraft, readNamedPrograms, saveNamedProgram, listSavedPrograms } from './utils/playgroundDraft.js'
 import { compilerLanguages } from '../../shared/playgroundLanguages.js'
 import './coding.css'
 
@@ -41,7 +41,7 @@ function PlaygroundEditor({ account, language, opened, onOpen, onLanguage, onBac
   const [input, setInput] = useState(opened?.input ?? draft?.input ?? defaults[language][1])
   const [programName, setProgramName] = useState(opened?.name || '')
   const [programId, setProgramId] = useState(opened?.id || null)
-  const [programs, setPrograms] = useState(() => readNamedPrograms(window.localStorage, account))
+  const [programs, setPrograms] = useState(() => listSavedPrograms(window.localStorage, account, languages))
   const [running, setRunning] = useState(false)
   const [message, setMessage] = useState(opened ? `Opened “${opened.name}” from this browser.` : draft ? 'Saved draft restored from this browser.' : '')
   const [phase, setPhase] = useState('')
@@ -56,8 +56,9 @@ function PlaygroundEditor({ account, language, opened, onOpen, onLanguage, onBac
   function save() {
     try {
       const saved = saveNamedProgram(window.localStorage, account, { id: programId, name: programName, language, code, input })
-      setProgramId(saved.id); setProgramName(saved.name); setPrograms(readNamedPrograms(window.localStorage, account))
+      setProgramId(saved.id); setProgramName(saved.name)
       if (!savePlaygroundDraft(window.localStorage, key, { code, input })) throw new Error('Save failed')
+      setPrograms(listSavedPrograms(window.localStorage, account, languages))
       window.localStorage.setItem(`quizly-playground-${account}-language`, language)
       setMessage(`Saved “${saved.name}” in this browser. Open it from Saved programs.`)
     } catch (failure) { setMessage(failure.message || 'Unable to save. Copy your code to keep it.') }
@@ -84,6 +85,13 @@ function PlaygroundEditor({ account, language, opened, onOpen, onLanguage, onBac
       <label htmlFor="saved-programs">Saved programs<select id="saved-programs" value="" disabled={running} onChange={event => { const program = programs.find(item => item.id === event.target.value); if (program && languages.some(([id]) => id === program.language)) onOpen(program) }}><option value="">Open a saved program ({programs.length})</option>{programs.map(item => <option key={item.id} value={item.id}>{item.name} · {languages.find(([id]) => id === item.language)?.[1] || item.language}</option>)}</select></label>
       <button className="button button-quiet" disabled={running} onClick={() => { setProgramId(null); setProgramName(''); edit(setCode, defaults[language][0]); setInput(defaults[language][1]) }}>New program</button>
     </div>
+    <section className="playground-saved-list" aria-label="Saved programs library">
+      <h2>Saved programs ({programs.length})</h2>
+      {programs.length === 0 ? <p className="muted">No saved programs found for this account in this browser.</p> : programs.map(program => <article key={program.id}>
+        <div><strong>{program.name}</strong><small>{languages.find(([id]) => id === program.language)?.[1] || program.language}</small></div>
+        <button className="button button-outline" disabled={running} onClick={() => onOpen(program)} aria-label={`Open ${program.name}`}>Open</button>
+      </article>)}
+    </section>
     <p className="muted">{instructions}</p>
     {compiled && <p className="muted">You can write and save {challenge.language} programs now. Running this language requires compiler setup.</p>}
     <section className="coding-editor-panel" aria-label="Playground editor">

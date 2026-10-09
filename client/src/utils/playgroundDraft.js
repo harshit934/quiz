@@ -40,3 +40,15 @@ export function saveNamedProgram(storage, account, program) {
   if (!restored || restored.code !== saved.code || restored.input !== saved.input) throw new Error('Unable to save. Copy your code to keep it.')
   return saved
 }
+
+export function listSavedPrograms(storage, account, languages) {
+  const programs = readNamedPrograms(storage, account)
+  for (const [language, label] of languages) {
+    const runtime = { react: 'jsx', 'node-js': 'nodejs', 'cloud-computing': 'bash' }[language] || language
+    const draft = readPlaygroundDraft(storage, `quizly-playground-${account}-${runtime}`)
+    if (draft && !programs.some(item => item.language === language && item.code === draft.code && item.input === draft.input)) {
+      programs.push({ id: `legacy-${runtime}`, name: `Saved ${label} draft`, language, code: draft.code, input: draft.input })
+    }
+  }
+  return programs
+}
