@@ -4,6 +4,7 @@ import { generateCodingChallenge } from '../../shared/generateCodingChallenge.js
 import { runSubjectChallenge } from './utils/subjectRunner.js'
 import { readPlaygroundDraft, readPlaygroundLanguage, savePlaygroundDraft, readNamedPrograms, saveNamedProgram, listSavedPrograms, renameSavedProgram, deleteSavedProgram } from './utils/playgroundDraft.js'
 import { downloadProgram } from './utils/programDownload.js'
+import { loadCloudPrograms, putCloudProgram, removeCloudProgram, mergeProgramLibrary } from './utils/cloudPrograms.js'
 import { compilerLanguages } from '../../shared/playgroundLanguages.js'
 import './coding.css'
 
@@ -43,6 +44,10 @@ function PlaygroundEditor({ account, language, opened, focusEditor, onOpen, onLa
   const [programName, setProgramName] = useState(opened?.name || '')
   const [programId, setProgramId] = useState(opened?.id || null)
   const [programs, setPrograms] = useState(() => listSavedPrograms(window.localStorage, account, languages))
+  const [cloudPrograms, setCloudPrograms] = useState([])
+  const [syncing, setSyncing] = useState(true)
+  const [cloudError, setCloudError] = useState('')
+  const [revision, setRevision] = useState(opened?.revision || 0)
   const [management, setManagement] = useState(null)
   const [managementError, setManagementError] = useState('')
   const [running, setRunning] = useState(false)
@@ -53,6 +58,40 @@ function PlaygroundEditor({ account, language, opened, focusEditor, onOpen, onLa
   const [error, setError] = useState('')
   const active = useRef(true)
   const editor = useRef(null)
+  const dirty = useRef(false)
+  async function refreshCloud() {
+    setSyncing(true); setCloudError('')
+    try {
+      const remote = await loadCloudPrograms()
+      if (!active.current) return
+      setCloudPrograms(remote)
+      if (!dirty.current) {
+        const latest = remote.find(item => item.id === programId) || (!programId ? remote.find(item => item.language === language) : null)
+        if (latest && !opened?.pending) {
+          setCode(latest.code); setInput(latest.input); setProgramName(latest.name); setProgramId(latest.id); setRevision(latest.revision)
+          setMessage(`Opened “${latest.name}” from your account.`)
+        }
+      }
+    } catch (failure) { if (active.current) setCloudError(failure.status === 401 ? 'Sign in again to access cloud saves.' : 'Cloud saves are unavailable. Browser copies are still available.') }
+    finally { if (active.current) setSyncing(false) }
+  }
+  useEffect(() => { refreshCloud() }, [])
+  const library = cloudError ? programs : mergeProgramLibrary(programs.filter(item => !item.revision || item.pending || cloudPrograms.some(remote => remote.id === item.id)), cloudPrograms)
+  function cacheCloud(program) {
+    try { saveNamedProgram(window.localStorage, account, { ...program, pending: false }) } catch { /* A cloud success remains valid even if browser storage is full. */ }
+    setCloudPrograms(list => [program, ...list.filter(item => item.id !== program.id)])
+    setPrograms(listSavedPrograms(window.localStorage, account, languages))
+  }
+  async function upload(program) {
+    setSyncing(true)
+    try {
+      const prepared = saveNamedProgram(window.localStorage, account, { ...program, pending: true })
+      const saved = await putCloudProgram(prepared)
+      cacheCloud(saved); setCloudError(''); setMessage(`“${saved.name}” saved to your account.`)
+      if (programId === program.id) { setProgramId(saved.id); setRevision(saved.revision) }
+    } catch (failure) { setMessage(failure.message || 'Upload failed. Your browser copy is kept.') }
+    finally { setSyncing(false) }
+  }
   useEffect(() => {
     if (focusEditor && editor.current) {
       editor.current.focus({ preventScroll: true })
@@ -62,32 +101,44 @@ function PlaygroundEditor({ account, language, opened, focusEditor, onOpen, onLa
   useEffect(() => { active.current = true; return () => { active.current = false } }, [])
   const web = ['html', 'css', 'jsx'].includes(challenge.runtime)
   const stdin = Boolean(compiled)
-  function edit(setter, value) { setter(value); setMessage('Unsaved changes'); setError(''); setOutput(null); setPreview('') }
+  function edit(setter, value) { dirty.current = true; setter(value); setMessage('Unsaved changes'); setError(''); setOutput(null); setPreview('') }
   function manage(type, program) { setManagement({ type, program, name: program.name }); setManagementError('') }
-  function confirmManagement(event) {
+  async function confirmManagement(event) {
     event.preventDefault()
     try {
+      setSyncing(true)
       if (management.type === 'rename') {
-        const renamed = renameSavedProgram(window.localStorage, account, management.program.id, management.name, languages)
-        if (programId === management.program.id) { setProgramName(renamed.name); setProgramId(renamed.id) }
+        const renamed = management.program.cloud || management.program.revision ? await putCloudProgram({ ...management.program, name: management.name }) : renameSavedProgram(window.localStorage, account, management.program.id, management.name, languages)
+        if (management.program.cloud || management.program.revision) cacheCloud(renamed)
+        if (programId === management.program.id) { setProgramName(renamed.name); setProgramId(renamed.id); setRevision(renamed.revision || 0) }
         setMessage(`Renamed to “${renamed.name}”.`)
       } else {
-        const deleted = deleteSavedProgram(window.localStorage, account, management.program.id, languages)
-        if (programId === deleted.id) setProgramId(null)
+        const deleted = management.program
+        if (deleted.cloud || deleted.revision) await removeCloudProgram(deleted)
+        if (programs.some(item => item.id === deleted.id)) deleteSavedProgram(window.localStorage, account, deleted.id, languages)
+        setCloudPrograms(list => list.filter(item => item.id !== deleted.id))
+        if (programId === deleted.id) { setProgramId(null); setRevision(0) }
         setMessage(`Deleted saved program “${deleted.name}”. Any code currently in the editor is kept.`)
       }
       setPrograms(listSavedPrograms(window.localStorage, account, languages)); setManagement(null)
     } catch (failure) { setManagementError(failure.message || 'Unable to update saved programs.') }
+    finally { setSyncing(false) }
   }
-  function save() {
+  async function save() {
+    setSyncing(true)
     try {
-      const saved = saveNamedProgram(window.localStorage, account, { id: programId, name: programName, language, code, input })
+      const saved = saveNamedProgram(window.localStorage, account, { id: programId, name: programName, language, code, input, ...(programId ? { revision } : {}), pending: true })
       setProgramId(saved.id); setProgramName(saved.name)
       if (!savePlaygroundDraft(window.localStorage, key, { code, input })) throw new Error('Save failed')
       setPrograms(listSavedPrograms(window.localStorage, account, languages))
       window.localStorage.setItem(`quizly-playground-${account}-language`, language)
-      setMessage(`Saved “${saved.name}” in this browser. Open it from Saved programs.`)
+      try {
+        const remote = await putCloudProgram(saved)
+        cacheCloud(remote); setRevision(remote.revision); dirty.current = false; setCloudError('')
+        setMessage(`Saved “${remote.name}” to your account. Available on your other devices.`)
+      } catch (failure) { setMessage(`Saved in this browser only. ${failure.status === 409 ? failure.message : 'Cloud save failed. Use Upload to retry.'}`) }
     } catch (failure) { setMessage(failure.message || 'Unable to save. Copy your code to keep it.') }
+    finally { setSyncing(false) }
   }
   async function run() {
     if (running) return
@@ -103,41 +154,45 @@ function PlaygroundEditor({ account, language, opened, focusEditor, onOpen, onLa
   }
   const instructions = web ? challenge.runtime === 'css' ? 'Style the sample .card containing a heading, email input, and button. Run code to preview your CSS.' : challenge.runtime === 'jsx' ? 'Define an App component in JSX. React is provided; the preview renders its initial markup.' : 'Write HTML and run code to preview it. Scripts are disabled in previews.' : stdin ? 'Write a complete program and print your answer to standard output.' : challenge.runtime === 'sql' ? 'Write a SQLite query. Edit the sales rows in the JSON input below.' : challenge.runtime === 'mongodb' ? 'Enter a MongoDB JSON aggregation pipeline. Edit the sample documents below.' : 'JavaScript: use console.log() to print output; JSON input is available as input. Python: use print() to print output. You can also define solve(input) and return a value.'
   return <main className="coding-hub coding-playground">
-    <button className="coding-back" onClick={onBack} disabled={running}><ArrowLeft size={18} />Coding Practice</button>
-    <div className="coding-hub-heading"><div><p className="eyebrow">Make room for practice</p><h1>Coding Playground</h1><p>Write freely, run your code, and save your draft.</p></div><button className="button button-quiet" onClick={save}><Save size={16} />Save code</button></div>
-    <div className="coding-filters"><label htmlFor="playground-language">Language<select id="playground-language" value={language} disabled={running} onChange={event => onLanguage(event.target.value)}>{languages.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><p role="status">{message || 'Drafts are saved separately for each language.'}</p></div>
+    <button className="coding-back" onClick={onBack} disabled={running || syncing}><ArrowLeft size={18} />Coding Practice</button>
+    <div className="coding-hub-heading"><div><p className="eyebrow">Make room for practice</p><h1>Coding Playground</h1><p>Write freely, run your code, and save your draft.</p></div><button className="button button-quiet" onClick={save} disabled={syncing}><Save size={16} />Save code</button></div>
+    <div className="coding-filters"><label htmlFor="playground-language">Language<select id="playground-language" value={language} disabled={running || syncing} onChange={event => onLanguage(event.target.value)}>{languages.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><p role="status">{message || 'Drafts are saved separately for each language.'}</p></div>
     <div className="playground-programs">
       <label htmlFor="program-name">Program name<input id="program-name" maxLength={80} placeholder="e.g. Array practice" value={programName} onChange={event => setProgramName(event.target.value)} /></label>
-      <label htmlFor="saved-programs">Saved programs<select id="saved-programs" value="" disabled={running} onChange={event => { const program = programs.find(item => item.id === event.target.value); if (program && languages.some(([id]) => id === program.language)) onOpen(program) }}><option value="">Open a saved program ({programs.length})</option>{programs.map(item => <option key={item.id} value={item.id}>{item.name} · {languages.find(([id]) => id === item.language)?.[1] || item.language}</option>)}</select></label>
-      <button className="button button-quiet" disabled={running} onClick={() => { setProgramId(null); setProgramName(''); edit(setCode, defaults[language][0]); setInput(defaults[language][1]) }}>New program</button>
+      <label htmlFor="saved-programs">Saved programs<select id="saved-programs" value="" disabled={running || syncing} onChange={event => { const program = library.find(item => item.id === event.target.value); if (program && languages.some(([id]) => id === program.language)) onOpen(program) }}><option value="">Open a saved program ({library.length})</option>{library.map(item => <option key={item.id} value={item.id}>{item.name} · {languages.find(([id]) => id === item.language)?.[1] || item.language}</option>)}</select></label>
+      <button className="button button-quiet" disabled={running || syncing} onClick={() => { setProgramId(null); setRevision(0); setProgramName(''); edit(setCode, defaults[language][0]); setInput(defaults[language][1]) }}>New program</button>
     </div>
     <section className="playground-saved-list" aria-label="Saved programs library">
-      <h2>Saved programs ({programs.length})</h2>
-      {programs.length === 0 ? <p className="muted">No saved programs found for this account in this browser.</p> : programs.map(program => <article key={program.id}>
-        <div><strong>{program.name}</strong><small>{languages.find(([id]) => id === program.language)?.[1] || program.language}</small></div>
+      <h2>Saved programs ({library.length})</h2>
+      <p role="status">{syncing ? 'Syncing your account…' : cloudError || 'Cloud saves are connected.'}</p>
+      <button className="button button-quiet" disabled={syncing || running} onClick={refreshCloud}>Refresh cloud saves</button>
+      {library.length === 0 ? <p className="muted">No saved programs found for this account in this browser.</p> : library.map(program => <article key={program.id}>
+        <div><strong>{program.name}</strong><small>{languages.find(([id]) => id === program.language)?.[1] || program.language} · {program.pending ? 'Browser copy · upload pending' : program.cloud ? 'Cloud saved' : 'Browser only'}</small></div>
         <div className="program-actions">
-          <button className="button button-outline" disabled={running} onClick={() => onOpen(program)} aria-label={`Open ${program.name}`}>Open</button>
+          {program.pending && cloudPrograms.some(remote => remote.id === program.id) && <button className="button button-quiet" disabled={syncing || running} onClick={() => onOpen(cloudPrograms.find(remote => remote.id === program.id))}>Open cloud version</button>}
+          {(!program.cloud || program.pending) && <button className="button button-quiet" disabled={syncing || running} onClick={() => upload(program)} aria-label={`Upload ${program.name}`}>Upload</button>}
+          <button className="button button-outline" disabled={running || syncing} onClick={() => onOpen(program)} aria-label={`Open ${program.name}`}>Open</button>
           <button className="button button-quiet" onClick={() => downloadProgram(program)} aria-label={`Download ${program.name}`}><Download size={15} />Download</button>
-          <button className="button button-quiet" disabled={running} onClick={() => manage('rename', program)} aria-label={`Rename ${program.name}`}>Rename</button>
-          <button className="button button-quiet program-delete" disabled={running} onClick={() => manage('delete', program)} aria-label={`Delete ${program.name}`}>Delete</button>
+          <button className="button button-quiet" disabled={running || syncing} onClick={() => manage('rename', program)} aria-label={`Rename ${program.name}`}>Rename</button>
+          <button className="button button-quiet program-delete" disabled={running || syncing} onClick={() => manage('delete', program)} aria-label={`Delete ${program.name}`}>Delete</button>
         </div>
       </article>)}
     </section>
     <p className="muted">{instructions}</p>
     {compiled && <p className="muted">You can write and save {challenge.language} programs now. Running this language requires compiler setup.</p>}
     <section className="coding-editor-panel" aria-label="Playground editor">
-      <div className="coding-language-bar"><span className="coding-js-logo">{challenge.badge}</span><strong>{challenge.language}{programName ? ` · ${programName}` : ''}</strong><button className="icon-button" aria-label="Reset playground code" disabled={running} onClick={() => { edit(setCode, defaults[language][0]); setInput(defaults[language][1]) }}><RotateCcw size={18} /></button></div>
-      <label className="sr-only" htmlFor="playground-code">{challenge.language} playground editor</label><textarea ref={editor} id="playground-code" className="coding-code-input playground-code" value={code} disabled={running} spellCheck={false} onChange={event => edit(setCode, event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); run() } }} />
-      <div className="coding-run-bar"><span aria-live="polite">{running ? phase : '3-second execution limit · Ctrl+Enter to run'}</span><button className="button button-quiet" onClick={() => downloadProgram({ name: programName, language, code })}><Download size={16} />Download code</button><button className="button button-primary" disabled={running} onClick={run}><Play size={16} />{running ? 'Running…' : 'Run code'}</button></div>
+      <div className="coding-language-bar"><span className="coding-js-logo">{challenge.badge}</span><strong>{challenge.language}{programName ? ` · ${programName}` : ''}</strong><button className="icon-button" aria-label="Reset playground code" disabled={running || syncing} onClick={() => { edit(setCode, defaults[language][0]); setInput(defaults[language][1]) }}><RotateCcw size={18} /></button></div>
+      <label className="sr-only" htmlFor="playground-code">{challenge.language} playground editor</label><textarea ref={editor} id="playground-code" className="coding-code-input playground-code" value={code} disabled={running || syncing} spellCheck={false} onChange={event => edit(setCode, event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); run() } }} />
+      <div className="coding-run-bar"><span aria-live="polite">{running ? phase : '3-second execution limit · Ctrl+Enter to run'}</span><button className="button button-quiet" onClick={() => downloadProgram({ name: programName, language, code })}><Download size={16} />Download code</button><button className="button button-primary" disabled={running || syncing} onClick={run}><Play size={16} />{running ? 'Running…' : 'Run code'}</button></div>
     </section>
-    {!web && <label className="playground-input-label" htmlFor="playground-input">{stdin ? 'Standard input' : 'JSON input'}<textarea id="playground-input" value={input} disabled={running} spellCheck={false} onChange={event => edit(setInput, event.target.value)} /></label>}
+    {!web && <label className="playground-input-label" htmlFor="playground-input">{stdin ? 'Standard input' : 'JSON input'}<textarea id="playground-input" value={input} disabled={running || syncing} spellCheck={false} onChange={event => edit(setInput, event.target.value)} /></label>}
     <section className="playground-output" aria-label="Playground output"><h2>{web ? 'Preview' : 'Output'}</h2><div aria-live="polite">{error && <p role="alert" className="form-error">{error}</p>}{output?.map(item => <pre className="coding-reference" key={item.name}>{item.error || (typeof item.actual === 'string' ? item.actual : JSON.stringify(item.actual, null, 2))}</pre>)}{preview && <iframe title="Playground preview" sandbox="allow-same-origin" srcDoc={preview} />}{!output && !error && <p className="muted">Run your code to see {web ? 'a preview' : 'the output'}.</p>}</div></section>
-    <p className="coding-local-note">Saved code stays in this browser for your account. Save changes before switching languages or leaving the page.</p>
+    <p className="coding-local-note">Cloud-saved programs are available wherever you sign in. Older browser saves stay here until you upload them. Save changes before leaving the page.</p>
     {management && <div className="modal-backdrop" onKeyDown={event => { if (event.key === 'Escape') setManagement(null) }}><form className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="manage-program-title" onSubmit={confirmManagement}>
       <h2 id="manage-program-title">{management.type === 'rename' ? 'Rename program' : 'Delete saved program?'}</h2>
-      {management.type === 'rename' ? <label className="field-label">New program name<input autoFocus required maxLength={80} value={management.name} onChange={event => setManagement({ ...management, name: event.target.value })} /></label> : <p>Delete “{management.program.name}” from this browser? This cannot be undone. Any code currently in the editor will stay there.</p>}
+      {management.type === 'rename' ? <label className="field-label">New program name<input autoFocus required maxLength={80} value={management.name} onChange={event => setManagement({ ...management, name: event.target.value })} /></label> : <p>Delete “{management.program.name}” {management.program.cloud ? 'from your account on all devices' : 'from this browser'}? This cannot be undone. Any code currently in the editor will stay there.</p>}
       {managementError && <p role="alert" className="form-error">{managementError}</p>}
-      <div className="modal-actions"><button autoFocus={management.type === 'delete'} type="button" className="button button-quiet" onClick={() => setManagement(null)}>Cancel</button><button type="submit" className="button button-primary">{management.type === 'rename' ? 'Save name' : 'Delete program'}</button></div>
+      <div className="modal-actions"><button disabled={syncing} autoFocus={management.type === 'delete'} type="button" className="button button-quiet" onClick={() => setManagement(null)}>Cancel</button><button disabled={syncing} type="submit" className="button button-primary">{management.type === 'rename' ? 'Save name' : 'Delete program'}</button></div>
     </form></div>}
   </main>
 }

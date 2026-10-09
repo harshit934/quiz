@@ -33,7 +33,7 @@ export function saveNamedProgram(storage, account, program) {
   const programs = readNamedPrograms(storage, account)
   const existing = programs.find(item => item.language === program.language && item.name.toLowerCase() === name.toLowerCase())
   if (existing && existing.id !== program.id) throw new Error('That name is already used for this language. Choose another name or open the existing program.')
-  const saved = { ...program, name, id: programs.some(item => item.id === program.id) ? program.id : crypto.randomUUID(), updatedAt: new Date().toISOString() }
+  const saved = { ...program, name, id: programs.some(item => item.id === program.id) || (typeof program.id === 'string' && Number.isInteger(program.revision)) ? program.id : crypto.randomUUID(), updatedAt: new Date().toISOString() }
   const next = [saved, ...programs.filter(item => item.id !== saved.id)]
   storage.setItem(`quizly-playground-${account}-programs`, JSON.stringify(next))
   const restored = readNamedPrograms(storage, account).find(item => item.id === saved.id)
