@@ -119,10 +119,12 @@ function attemptDeadline(attempt, exam) {
   return exam.endTime < durationEnd ? exam.endTime : durationEnd
 }
 
-async function findExam(examId) {
+async function findExam(examId, { populate = true } = {}) {
   if (!mongoose.isValidObjectId(examId)) return null
-  return Exam.findById(examId).populate('category', 'name slug parentSlug rootSlug')
-    .populate('topics', 'name slug parentSlug rootSlug').lean()
+  const query = Exam.findById(examId)
+  if (populate) query.populate('category', 'name slug parentSlug rootSlug')
+    .populate('topics', 'name slug parentSlug rootSlug')
+  return query.lean()
 }
 
 async function completeAttempt(attempt, exam, status = 'completed', submittedAt = new Date()) {
@@ -483,7 +485,7 @@ router.post('/:id/register', asyncHandler(async (req, res) => {
 
 router.post('/:id/attempt', asyncHandler(async (req, res) => {
   if (req.user.role === 'admin') return res.status(403).json({ message: 'Only students can start exam attempts.' })
-  const exam = await findExam(req.params.id)
+  const exam = await findExam(req.params.id, { populate: false })
   if (!exam) return res.status(404).json({ message: 'Exam not found.' })
   if (exam.accessCode && (typeof req.body?.accessCode !== 'string' || req.body.accessCode.trim().toUpperCase() !== exam.accessCode)) {
     return res.status(403).json({ message: 'Enter the correct exam code provided by your administrator.' })
@@ -496,7 +498,7 @@ router.post('/:id/attempt', asyncHandler(async (req, res) => {
   if (!registration) return res.status(403).json({ message: 'Register for this exam before starting an attempt.' })
   const activeAttempt = await ExamAttempt.findOne({ exam: exam._id, student: req.user._id, status: 'in-progress' })
   if (activeAttempt && getRemainingSeconds(activeAttempt.startedAt, exam.duration, now, exam.endTime) > 0) {
-    return res.status(409).json({ message: 'Continue your active attempt instead of starting another.' })
+    return res.json(attemptView(activeAttempt, exam))
   }
   if (activeAttempt) await completeAttempt(activeAttempt, exam, 'expired', attemptDeadline(activeAttempt, exam))
   const attemptsUsed = await ExamAttempt.countDocuments({ exam: exam._id, student: req.user._id })

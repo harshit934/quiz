@@ -26,6 +26,8 @@ export default function ExamsPage({ route = [], user, navigate }) {
   const [submitting, setSubmitting] = useState(false)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
   const [accessCode, setAccessCode] = useState('')
+  const [starting, setStarting] = useState(false)
+  const startPending = useRef(false)
   const submitStarted = useRef(false)
 
   const [examId, action, attemptId] = route
@@ -64,6 +66,8 @@ export default function ExamsPage({ route = [], user, navigate }) {
       setAttempt(null)
       return undefined
     }
+    // Starting already returns the full attempt; avoid fetching it twice.
+    if (attempt?._id === attemptId && String(attempt.exam) === examId) return undefined
     let active = true
     setLoading(true)
     request(`/exams/${examId}/attempt/${attemptId}`).then(data => {
@@ -145,16 +149,23 @@ export default function ExamsPage({ route = [], user, navigate }) {
   }
 
   async function startAttempt() {
+    if (startPending.current) return
+    startPending.current = true
+    setStarting(true)
     setError('')
     try {
-      const started = await request(`/exams/${examId}/attempt`, { method: 'POST', body: JSON.stringify({ accessCode }) })
+      const started = await request(`/exams/${examId}/attempt`, { method: 'POST', body: JSON.stringify({ accessCode }), timeoutMs: 90000 })
       submitStarted.current = false
+      setQuestionIndex(0)
       setAttempt(started)
       setAnswers(started.answers || [])
       setRemaining(started.remainingSeconds || 0)
       navigate(`#exams/${examId}/attempt/${started._id}`)
     } catch (startError) {
-      setError(startError.message)
+      setError(startError.name === 'AbortError' ? 'The exam server is taking longer than expected. Try again to resume your attempt.' : startError.message)
+    } finally {
+      startPending.current = false
+      setStarting(false)
     }
   }
 
@@ -203,7 +214,8 @@ export default function ExamsPage({ route = [], user, navigate }) {
             <div className="exam-action-row">
               {exam.requiresAccessCode && exam.registration && exam.status === 'live' && !activeAttempt && remainingAttempts > 0 && <label className="field-label">Exam access code<input maxLength="32" autoComplete="off" placeholder="Enter the code from your admin" value={accessCode} onChange={event => setAccessCode(event.target.value.toUpperCase())} /></label>}
               {!exam.registration && <button className="button button-primary" onClick={register}>Register for exam</button>}
-              {exam.registration && exam.status === 'live' && !activeAttempt && remainingAttempts > 0 && <button className="button button-primary" onClick={startAttempt}>Start attempt</button>}
+              {exam.registration && exam.status === 'live' && !activeAttempt && remainingAttempts > 0 && <button className="button button-primary" disabled={starting} onClick={startAttempt}>{starting ? 'Starting exam…' : 'Start attempt'}</button>}
+              {starting && <span className="muted" role="status">Connecting to the exam server. Please wait.</span>}
               {activeAttempt && <button className="button button-primary" onClick={() => navigate(`#exams/${exam._id}/attempt/${activeAttempt._id}`)}>Continue attempt</button>}
               {exam.registration && remainingAttempts <= 0 && !activeAttempt && <span className="muted">No attempts remaining.</span>}
               {exam.registration && exam.status !== 'live' && <span className="muted">You are registered. The exam is not currently in its start window.</span>}

@@ -363,7 +363,12 @@ test('registered student can start, save, and submit one server-scored attempt w
     assert.equal(started.status, 'in-progress')
     assert.equal('correctAnswer' in started.questions[0], false)
     const extraAttempt = await fetch(`${baseUrl}/attempt`, { method: 'POST', headers })
-    assert.equal(extraAttempt.status, 409)
+    assert.equal(extraAttempt.status, 200)
+    const resumed = await extraAttempt.json()
+    assert.equal(resumed._id, started._id)
+    assert.equal(resumed.startedAt, started.startedAt)
+    assert.equal('correctAnswer' in resumed.questions[0], false)
+    assert.equal(attemptsUsed, 1)
 
     const saved = await fetch(`${baseUrl}/attempt/${attempt._id}/answers`, {
       method: 'PUT',

@@ -14,6 +14,7 @@ export function clearToken() {
 }
 
 export async function request(path, options = {}) {
+  const { timeoutMs = 5000, ...fetchOptions } = options
   const headers = new Headers(options.headers || {})
   const token = getToken()
   if (token && token !== 'demo-session') headers.set('Authorization', `Bearer ${token}`)
@@ -21,9 +22,9 @@ export async function request(path, options = {}) {
 
   let response
   const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), 5000)
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
   try {
-    response = await fetch(`${API_BASE}/api${path}`, { ...options, headers, signal: options.signal || controller.signal })
+    response = await fetch(`${API_BASE}/api${path}`, { ...fetchOptions, headers, signal: options.signal || controller.signal })
   } catch (error) {
     error.networkUnavailable = true
     throw error
