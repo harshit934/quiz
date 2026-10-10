@@ -11,6 +11,7 @@ import Question from '../models/Question.js'
 import { authenticate, requireAdmin } from '../middleware/auth.js'
 import asyncHandler from '../middleware/asyncHandler.js'
 import { getExamStatus, getRemainingSeconds, scoreExamAttempt } from '../examService.js'
+import { shuffleQuestionOptions } from '../../../shared/shuffle.js'
 
 const router = Router()
 const objectId = z.string().regex(/^[a-f\d]{24}$/i)
@@ -508,7 +509,7 @@ router.post('/:id/attempt', asyncHandler(async (req, res) => {
     student: req.user._id,
     attemptNumber: attemptsUsed + 1,
     status: 'in-progress',
-    questionSnapshots: exam.questionSnapshots.map(question => ({
+    questionSnapshots: exam.questionSnapshots.map(question => shuffleQuestionOptions({
       question: question.question,
       text: question.text,
       options: question.options,

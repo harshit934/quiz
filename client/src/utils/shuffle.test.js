@@ -4,7 +4,7 @@ import { fisherYates, shuffleQuestionOptions } from './shuffle.js'
 
 test('Fisher-Yates enumerates every four-option permutation exactly once', () => {
   const originalOptions = ['North', 'East', 'South', 'West']
-  const question = { text: 'Which direction is opposite north?', options: originalOptions, correctAnswer: 2 }
+  const question = { text: 'Which direction is north?', options: originalOptions, correctAnswer: 0 }
   const correctPositions = [0, 0, 0, 0]
   const observedPermutations = new Set()
 
@@ -18,7 +18,7 @@ test('Fisher-Yates enumerates every four-option permutation exactly once', () =>
 
         assert.deepEqual([...shuffled.options].sort(), [...originalOptions].sort())
         assert.equal(shuffled.options[shuffled.correctAnswer], originalOptions[question.correctAnswer])
-        assert.equal(question.correctAnswer, 2)
+        assert.equal(question.correctAnswer, 0)
         observedPermutations.add(shuffled.options.join('|'))
         correctPositions[shuffled.correctAnswer] += 1
       }

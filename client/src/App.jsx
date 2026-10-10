@@ -17,7 +17,7 @@ import LearningProvider from './LearningContext.jsx'
 import { exploreRoute } from './utils/exploreRoute.js'
 import { LoadingState, Toast } from './components/ui.jsx'
 import { demoCategories, demoQuizzes } from './data/demoData.js'
-import { fisherYates } from './utils/shuffle.js'
+import { fisherYates, shuffleQuestionOptions } from './utils/shuffle.js'
 import {
   clearToken,
   getToken,
@@ -52,7 +52,7 @@ const defaultStats = {
 function prepareQuiz(quiz) {
   return {
     ...quiz,
-    questions: fisherYates(quiz.questions || []),
+    questions: fisherYates(quiz.questions || []).map(question => shuffleQuestionOptions(question)),
   }
 }
 
