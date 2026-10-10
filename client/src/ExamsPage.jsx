@@ -4,6 +4,7 @@ import {
   Circle, Clock3, Flag, ListChecks, ShieldAlert,
 } from 'lucide-react'
 import { EmptyState, LoadingState } from './components/ui.jsx'
+import ExamCameraMonitor from './components/ExamCameraMonitor.jsx'
 import { getToken, request } from './services/api.js'
 
 const formatDate = value => new Date(value).toLocaleString()
@@ -226,6 +227,7 @@ export default function ExamsPage({ route = [], user, navigate }) {
 
       {attempt && (
         <>
+          {!completed && <ExamCameraMonitor key={attempt._id} />}
           <header className="exam-take-heading"><div><p className="eyebrow">{exam?.title || 'Exam attempt'} · Attempt {attempt.attemptNumber}</p><h1>{completed ? 'Attempt submitted' : 'Exam in progress'}</h1></div><div className={`exam-countdown ${remaining < 300 ? 'exam-countdown-warning' : ''}`}><Clock3 size={19} /><span>{formatClock(remaining)}</span></div></header>
           {completed ? <section className="exam-panel exam-result-summary"><CheckCircle2 size={28} /><h2>{attempt.passed ? 'You passed' : 'Attempt complete'}</h2><p className="exam-result-score">{attempt.score} / {attempt.totalMarks} <span>({attempt.percentage}%)</span></p><p className="muted">Correct {attempt.correctAnswers} · Wrong {attempt.wrongAnswers} · Unanswered {attempt.unanswered}</p><button className="button button-quiet" onClick={() => navigate(`#exams/${examId}`)}>Back to exam</button></section> : currentQuestion && (
             <div className="exam-take-layout">

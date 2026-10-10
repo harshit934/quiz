@@ -1,0 +1,11 @@
+.exam-camera-monitor { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
+.exam-camera-preview { width: 180px; aspect-ratio: 4 / 3; flex-shrink: 0; display: grid; place-items: center; border-radius: 10px; background: var(--surface-soft); color: var(--muted); overflow: hidden; }
+.exam-camera-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.exam-camera-preview video[hidden] { display: none; }
+.exam-camera-details { min-width: 0; }
+.exam-camera-details h2, .exam-camera-details p { display: flex; align-items: center; gap: 8px; }
+.exam-camera-details h2 { font-size: 16px; margin: 0 0 8px; }
+.exam-camera-details p { margin: 8px 0; }
+.exam-camera-details svg { flex-shrink: 0; }
+.exam-camera-warning { border-color: var(--orange, #bd640b); }
+@media (max-width: 600px) { .exam-camera-monitor { flex-direction: column; align-items: stretch; } .exam-camera-preview { width: min(100%, 240px); } }
