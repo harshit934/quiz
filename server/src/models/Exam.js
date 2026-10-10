@@ -13,6 +13,7 @@ const examSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true, maxlength: 120 },
   description: { type: String, default: '', maxlength: 1000 },
   instructions: { type: String, default: '', maxlength: 5000 },
+  accessCode: { type: String, default: '', trim: true, uppercase: true, maxlength: 32 },
   category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true, index: true },
   topics: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Category' }],
   difficulty: { type: String, enum: ['Easy', 'Medium', 'Hard', 'Mixed'], required: true },

@@ -209,6 +209,7 @@ test('administrator can create a scheduled exam from existing question-bank refe
         title: 'Fixture assessment',
         description: 'Test exam',
         instructions: 'Read each question carefully.',
+        requiresAccessCode: true,
         category: subjectId,
         topics: [],
         difficulty: 'Easy',
@@ -225,6 +226,9 @@ test('administrator can create a scheduled exam from existing question-bank refe
     })
     assert.equal(response.status, 201)
     const body = await response.json()
+    assert.equal(body.requiresAccessCode, true)
+    assert.match(body.accessCode, /^[A-Z2-9]{6}$/)
+    assert.equal(created.accessCode, body.accessCode)
     assert.equal(body.questions.length, 1)
     assert.equal(body.questions[0].question, questionId)
     assert.equal(created.questions[0], questionId)
@@ -331,9 +335,28 @@ test('registered student can start, save, and submit one server-scored attempt w
     assert.equal(details.status, 200)
     const detailBody = await details.json()
     assert.equal('questions' in detailBody, false)
+    assert.equal('accessCode' in detailBody, false)
+    assert.equal(detailBody.requiresAccessCode, false)
 
     const registration = await fetch(`${baseUrl}/register`, { method: 'POST', headers })
     assert.equal(registration.status, 200)
+    // Protect entry on the server, including direct API requests.
+    exam.accessCode = 'AJFJ12'
+    const protectedDetails = await fetch(baseUrl, { headers })
+    const protectedBody = await protectedDetails.json()
+    assert.equal(protectedBody.requiresAccessCode, true)
+    assert.equal('accessCode' in protectedBody, false)
+    for (const accessCode of [undefined, 'WRONG', 123]) {
+      const denied = await fetch(`${baseUrl}/attempt`, { method: 'POST', headers, body: JSON.stringify({ accessCode }) })
+      assert.equal(denied.status, 403)
+      assert.equal(attemptsUsed, 0)
+    }
+    const accepted = await fetch(`${baseUrl}/attempt`, { method: 'POST', headers, body: JSON.stringify({ accessCode: ' ajfj12 ' }) })
+    assert.equal(accepted.status, 201)
+    // Reset the fixture to also exercise exams without a code.
+    exam.accessCode = ''
+    attempt = undefined
+    attemptsUsed = 0
     const start = await fetch(`${baseUrl}/attempt`, { method: 'POST', headers })
     assert.equal(start.status, 201)
     const started = await start.json()

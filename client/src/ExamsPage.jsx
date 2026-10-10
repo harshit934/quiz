@@ -25,6 +25,7 @@ export default function ExamsPage({ route = [], user, navigate }) {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
+  const [accessCode, setAccessCode] = useState('')
   const submitStarted = useRef(false)
 
   const [examId, action, attemptId] = route
@@ -39,6 +40,7 @@ export default function ExamsPage({ route = [], user, navigate }) {
     let active = true
     setLoading(true)
     setError('')
+    setAccessCode('')
     const load = examId ? request(`/exams/${examId}`) : request('/exams')
     load.then(data => {
       if (!active) return
@@ -145,7 +147,7 @@ export default function ExamsPage({ route = [], user, navigate }) {
   async function startAttempt() {
     setError('')
     try {
-      const started = await request(`/exams/${examId}/attempt`, { method: 'POST' })
+      const started = await request(`/exams/${examId}/attempt`, { method: 'POST', body: JSON.stringify({ accessCode }) })
       submitStarted.current = false
       setAttempt(started)
       setAnswers(started.answers || [])
@@ -199,6 +201,7 @@ export default function ExamsPage({ route = [], user, navigate }) {
             <div className="exam-instructions"><h2>Instructions</h2><p>{exam.instructions || 'Answer each question before the exam timer expires. Your score is calculated after submission.'}</p><p>Allowed attempts: {exam.maxAttempts}. Passing score: {exam.passingPercentage}%.</p></div>
             {exam.attempts?.length > 0 && <section className="exam-past-attempts"><h3>Your attempts</h3>{exam.attempts.map(item => <p key={item._id}>Attempt {item.attemptNumber}: {item.status}{item.percentage == null ? '' : ` · ${item.percentage}%`}</p>)}</section>}
             <div className="exam-action-row">
+              {exam.requiresAccessCode && exam.registration && exam.status === 'live' && !activeAttempt && remainingAttempts > 0 && <label className="field-label">Exam access code<input maxLength="32" autoComplete="off" placeholder="Enter the code from your admin" value={accessCode} onChange={event => setAccessCode(event.target.value.toUpperCase())} /></label>}
               {!exam.registration && <button className="button button-primary" onClick={register}>Register for exam</button>}
               {exam.registration && exam.status === 'live' && !activeAttempt && remainingAttempts > 0 && <button className="button button-primary" onClick={startAttempt}>Start attempt</button>}
               {activeAttempt && <button className="button button-primary" onClick={() => navigate(`#exams/${exam._id}/attempt/${activeAttempt._id}`)}>Continue attempt</button>}

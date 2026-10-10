@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { randomInt } from 'node:crypto'
 import mongoose from 'mongoose'
 import { z } from 'zod'
 import Exam from '../models/Exam.js'
@@ -17,6 +18,7 @@ const examInput = z.object({
   title: z.string().trim().min(3).max(120),
   description: z.string().trim().max(1000).default(''),
   instructions: z.string().trim().max(5000).default(''),
+  requiresAccessCode: z.boolean().default(false),
   category: objectId,
   topics: z.array(objectId).max(100).default([]),
   difficulty: z.enum(['Easy', 'Medium', 'Hard', 'Mixed']),
@@ -42,6 +44,11 @@ function id(value) {
   return String(value?._id ?? value)
 }
 
+function generateAccessCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  return Array.from({ length: 6 }, () => alphabet[randomInt(alphabet.length)]).join('')
+}
+
 function publicQuestion(question) {
   return {
     id: id(question.question),
@@ -56,6 +63,7 @@ function examView(exam, { includeKeys = false, registration = null, attempts = [
     title: exam.title,
     description: exam.description,
     instructions: exam.instructions,
+    requiresAccessCode: Boolean(exam.accessCode),
     category: exam.category,
     topics: exam.topics,
     difficulty: exam.difficulty,
@@ -73,6 +81,7 @@ function examView(exam, { includeKeys = false, registration = null, attempts = [
     updatedAt: exam.updatedAt,
   }
   if (includeKeys) view.questions = exam.questionSnapshots
+  if (includeKeys) view.accessCode = exam.accessCode || ''
   if (canEdit !== null) view.canEdit = canEdit
   return view
 }
@@ -324,6 +333,7 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
   const input = examInput.parse(req.body)
   const selection = await buildQuestionSelection(input)
   const exam = await Exam.create({
+    accessCode: input.requiresAccessCode ? generateAccessCode() : '',
     ...input,
     questions: selection.questions,
     questionSnapshots: selection.questionSnapshots,
@@ -475,6 +485,9 @@ router.post('/:id/attempt', asyncHandler(async (req, res) => {
   if (req.user.role === 'admin') return res.status(403).json({ message: 'Only students can start exam attempts.' })
   const exam = await findExam(req.params.id)
   if (!exam) return res.status(404).json({ message: 'Exam not found.' })
+  if (exam.accessCode && (typeof req.body?.accessCode !== 'string' || req.body.accessCode.trim().toUpperCase() !== exam.accessCode)) {
+    return res.status(403).json({ message: 'Enter the correct exam code provided by your administrator.' })
+  }
   const now = new Date()
   if (getExamStatus(exam) !== 'live' || now < new Date(exam.startTime) || now >= new Date(exam.endTime)) {
     return res.status(409).json({ message: 'This exam is not currently open.' })
@@ -594,7 +607,10 @@ router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   await assertEditable(exam)
   const selection = await buildQuestionSelection(input)
   const currentStatus = exam.status
-  Object.assign(exam, input, selection, { status: currentStatus })
+  Object.assign(exam, input, selection, {
+    status: currentStatus,
+    accessCode: input.requiresAccessCode ? (exam.accessCode || generateAccessCode()) : '',
+  })
   await exam.save()
   res.json(examView(exam.toObject(), { includeKeys: true }))
 }))

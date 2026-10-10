@@ -23,7 +23,7 @@ function blankForm() {
     difficulty: 'Mixed', questionCount: 10, duration: 60,
     startTime: toLocalInput(start), endTime: toLocalInput(end),
     passingPercentage: 60, maxAttempts: 1, selectionMethod: 'manual', questionIds: [],
-    status: 'draft',
+    status: 'draft', requiresAccessCode: false,
   }
 }
 
@@ -118,6 +118,7 @@ export default function AdminExamsPage({ route = [], navigate }) {
           title: existing.title,
           description: existing.description || '',
           instructions: existing.instructions || '',
+          requiresAccessCode: Boolean(existing.requiresAccessCode),
           category: asId(existing.category),
           topics: (existing.topics || []).map(asId),
           difficulty: existing.difficulty,
@@ -283,6 +284,7 @@ export default function AdminExamsPage({ route = [], navigate }) {
               <label className="field-label exam-field-wide">Exam title<input required minLength="3" maxLength="120" value={form.title} onChange={event => updateForm('title', event.target.value)} /></label>
               <label className="field-label exam-field-wide">Description<textarea rows="2" maxLength="1000" value={form.description} onChange={event => updateForm('description', event.target.value)} /></label>
               <label className="field-label exam-field-wide">Instructions<textarea rows="3" maxLength="5000" value={form.instructions} onChange={event => updateForm('instructions', event.target.value)} /></label>
+              <label className="exam-field-wide"><input type="checkbox" checked={form.requiresAccessCode} onChange={event => updateForm('requiresAccessCode', event.target.checked)} /> Require an exam access code<p className="muted">A code is generated automatically when you save and shown only in the admin exam view. Share it with students to let them enter.</p></label>
               <label className="field-label">Subject<select required value={form.category} onChange={event => setForm(current => ({ ...current, category: event.target.value, topics: [], questionIds: [] }))}><option value="">Choose a subject</option>{subjects.map(item => <option key={item._id} value={item._id}>{item.name}</option>)}</select></label>
               <label className="field-label">Difficulty<select value={form.difficulty} onChange={event => setForm(current => ({ ...current, difficulty: event.target.value, questionIds: [] }))}>{['Easy', 'Medium', 'Hard', 'Mixed'].map(item => <option key={item}>{item}</option>)}</select></label>
               {availableTopics.length > 0 && <fieldset className="exam-topics exam-field-wide"><legend>Topics <span className="optional-label">(leave empty to include all subject topics)</span></legend><div>{availableTopics.map(topic => <label key={topic._id}><input type="checkbox" checked={form.topics.includes(topic._id)} onChange={() => setForm(current => ({ ...current, topics: current.topics.includes(topic._id) ? current.topics.filter(id => id !== topic._id) : [...current.topics, topic._id], questionIds: [] }))} />{topic.name}</label>)}</div></fieldset>}
@@ -312,6 +314,7 @@ export default function AdminExamsPage({ route = [], navigate }) {
         <>
           <button className="back-link exam-back" onClick={() => navigate('#admin/exams')}><ArrowLeft size={15} /> All exams</button>
           <section className="exam-panel exam-detail-heading"><div><p className="eyebrow">{exam.category?.name || 'Exam'} · {exam.difficulty}</p><h2>{exam.title}</h2><p className="muted">{exam.description}</p></div><span className={`exam-status exam-status-${exam.status}`}>{exam.status}</span></section>
+          <p className="exam-help">{exam.accessCode ? `Exam access code: ${exam.accessCode}` : 'No access code required.'}</p>
           <section className="exam-stat-grid exam-detail-stats">
             <StatCard icon={BookOpenCheck} label="Questions" value={exam.questionCount} detail={`${exam.duration} minutes`} />
             <StatCard icon={UsersRound} label="Participants" value={overview?.recentExams.find(item => item._id === exam._id)?.participants ?? '—'} detail={`${exam.maxAttempts} max attempts`} />
