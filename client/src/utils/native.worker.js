@@ -1,3 +1,5 @@
+import { executeSql } from './sqlResult.js'
+
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value
 const same = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b))
 self.onmessage = async ({ data }) => {
@@ -51,9 +53,7 @@ json.dumps(results, allow_nan=False)`)
         try {
           db.run('CREATE TABLE sales (region TEXT, amount INTEGER)')
           for (const row of input.sales) db.run('INSERT INTO sales VALUES (?, ?)', [row.region, row.amount])
-          const result = db.exec(code)
-          if (result.length > 1) throw new Error('Return one result set.')
-          return result.length ? result[0].values.map(row => Object.fromEntries(result[0].columns.map((key, i) => [key, row[i]]))) : []
+          return executeSql(db, code, data.playground)
         } finally { db.close() }
       }
     }

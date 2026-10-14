@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Download, Play, RotateCcw, Save } from 'lucide-react'
 import { generateCodingChallenge } from '../../shared/generateCodingChallenge.js'
 import { runSubjectChallenge } from './utils/subjectRunner.js'
+import SqlResultTable from './SqlResultTable.js'
 import { readPlaygroundDraft, readPlaygroundLanguage, savePlaygroundDraft, readNamedPrograms, saveNamedProgram, listSavedPrograms, renameSavedProgram, deleteSavedProgram } from './utils/playgroundDraft.js'
 import { downloadProgram } from './utils/programDownload.js'
 import { loadCloudPrograms, putCloudProgram, removeCloudProgram, mergeProgramLibrary } from './utils/cloudPrograms.js'
@@ -186,7 +187,11 @@ function PlaygroundEditor({ account, language, opened, focusEditor, onOpen, onLa
       <div className="coding-run-bar"><span aria-live="polite">{running ? phase : '3-second execution limit · Ctrl+Enter to run'}</span><button className="button button-quiet" onClick={() => downloadProgram({ name: programName, language, code })}><Download size={16} />Download code</button><button className="button button-primary" disabled={running || syncing} onClick={run}><Play size={16} />{running ? 'Running…' : 'Run code'}</button></div>
     </section>
     {!web && <label className="playground-input-label" htmlFor="playground-input">{stdin ? 'Standard input' : 'JSON input'}<textarea id="playground-input" value={input} disabled={running || syncing} spellCheck={false} onChange={event => edit(setInput, event.target.value)} /></label>}
-    <section className="playground-output" aria-label="Playground output"><h2>{web ? 'Preview' : 'Output'}</h2><div aria-live="polite">{error && <p role="alert" className="form-error">{error}</p>}{output?.map(item => <pre className="coding-reference" key={item.name}>{item.error || (typeof item.actual === 'string' ? item.actual : JSON.stringify(item.actual, null, 2))}</pre>)}{preview && <iframe title="Playground preview" sandbox="allow-same-origin" srcDoc={preview} />}{!output && !error && <p className="muted">Run your code to see {web ? 'a preview' : 'the output'}.</p>}</div></section>
+    <section className="playground-output" aria-label="Playground output"><h2>{web ? 'Preview' : 'Output'}</h2><div aria-live="polite">{error && <p role="alert" className="form-error">{error}</p>}{output?.map(item => {
+      if (challenge.runtime === 'sql' && item.actual?.type === 'table') return <SqlResultTable key={item.name} columns={item.actual.columns} rows={item.actual.rows} />
+      const actual = challenge.runtime === 'sql' && item.actual?.type === 'success' ? item.actual.message : item.actual
+      return <pre className="coding-reference" key={item.name} role={item.error ? 'alert' : undefined}>{item.error || (typeof actual === 'string' ? actual : JSON.stringify(actual, null, 2))}</pre>
+    })}{preview && <iframe title="Playground preview" sandbox="allow-same-origin" srcDoc={preview} />}{!output && !error && <p className="muted">Run your code to see {web ? 'a preview' : 'the output'}.</p>}</div></section>
     <p className="coding-local-note">Cloud-saved programs are available wherever you sign in. Older browser saves stay here until you upload them. Save changes before leaving the page.</p>
     {management && <div className="modal-backdrop" onKeyDown={event => { if (event.key === 'Escape') setManagement(null) }}><form className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="manage-program-title" onSubmit={confirmManagement}>
       <h2 id="manage-program-title">{management.type === 'rename' ? 'Rename program' : 'Delete saved program?'}</h2>

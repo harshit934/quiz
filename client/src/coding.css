@@ -118,6 +118,11 @@
 .playground-input-label textarea { min-height: 100px; padding: 14px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; font: 14px/1.6 Consolas, monospace; resize: vertical; }
 .playground-output { margin-top: 24px; }
 .playground-output iframe { width: 100%; min-height: 320px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+.playground-sql-table-scroll { overflow-x: auto; }
+.playground-sql-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+.playground-sql-table th, .playground-sql-table td { padding: 12px 16px; border: 1px solid var(--line); }
+.playground-sql-table th { background: var(--surface-soft); font-weight: 700; }
+.playground-sql-table .playground-sql-empty { color: var(--muted); text-align: center; }
 .coding-exam-clock { display: flex; align-items: center; gap: 10px; color: var(--ink); padding: 8px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .coding-exam-clock strong { font-size: 22px; font-variant-numeric: tabular-nums; }
 .coding-exam-clock span { font-size: 12px; color: var(--muted); }

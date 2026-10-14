@@ -6,6 +6,8 @@ import { aggregate } from 'mingo'
 import { transform } from '@babel/standalone'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import SqlResultTable from '../SqlResultTable.js'
+import { executeSql } from './sqlResult.js'
 import { codingChallenges } from '../../../shared/codingChallenges.js'
 import { generateCodingChallenge } from '../../../shared/generateCodingChallenge.js'
 import { subjectLanguages } from '../../../shared/nativeCodingChallenges.js'
@@ -49,6 +51,44 @@ test('SQLite and MongoDB native references pass every dataset', async () => {
       }
       assert.deepEqual(actual, fixture.expected, challenge.id)
     }
+  }
+})
+test('SQL playground output preserves headers, rows, empty results, and write statements', async () => {
+  const SQL = await initSqlJs()
+  const db = new SQL.Database()
+  try {
+    assert.deepEqual(executeSql(db, 'CREATE TABLE people (name TEXT, active INTEGER)', true), {
+      type: 'success', message: 'Query executed successfully.',
+    })
+    executeSql(db, "INSERT INTO people VALUES ('Ada', 1), ('Grace', 0)", true)
+    const selected = executeSql(db, 'SELECT name AS person, active FROM people ORDER BY name', true)
+    assert.deepEqual(selected, { type: 'table', columns: ['person', 'active'], rows: [['Ada', 1], ['Grace', 0]] })
+    assert.deepEqual(executeSql(db, 'SELECT name AS person, active FROM people ORDER BY name', false), [{ person: 'Ada', active: 1 }, { person: 'Grace', active: 0 }])
+    const table = renderToStaticMarkup(React.createElement(SqlResultTable, selected))
+    assert.match(table, /<th scope="col">person<\/th>/)
+    assert.match(table, /<td>Ada<\/td>/)
+    assert.match(table, /<td>Grace<\/td>/)
+    assert.equal((table.match(/<tr>/g) || []).length, 3)
+
+    const empty = executeSql(db, 'SELECT name, active FROM people WHERE active = 2', true)
+    assert.deepEqual(empty, { type: 'table', columns: ['name', 'active'], rows: [] })
+    assert.match(renderToStaticMarkup(React.createElement(SqlResultTable, empty)), /No rows returned\./)
+    const emptyAfterSetup = executeSql(db, 'CREATE TABLE empty_rows (id INTEGER); SELECT id FROM empty_rows', true)
+    assert.deepEqual(emptyAfterSetup, { type: 'table', columns: ['id'], rows: [] })
+    for (const query of [
+      "INSERT INTO people VALUES ('Linus', 1)",
+      'UPDATE people SET active = 1 WHERE name = \'Grace\'',
+      "DELETE FROM people WHERE name = 'Linus'",
+    ]) {
+      assert.deepEqual(executeSql(db, query, true), { type: 'success', message: 'Query executed successfully.' })
+    }
+    assert.deepEqual(executeSql(db, 'SELECT name, active FROM people ORDER BY name', true), {
+      type: 'table', columns: ['name', 'active'], rows: [['Ada', 1], ['Grace', 1]],
+    })
+    assert.throws(() => executeSql(db, 'SELECT name FROM people; SELECT active FROM people', true), /one result set/)
+    assert.throws(() => executeSql(db, 'SELECT missing FROM people', true))
+  } finally {
+    db.close()
   }
 })
 test('React references compile JSX and render the required native markup', () => {
