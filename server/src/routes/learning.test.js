@@ -46,3 +46,52 @@ test('compiler-independent coding updates accept generated questions and reject 
   assert.equal(validateLearningOperation(body).data.challenge.id, challenge.id)
   assert.throws(() => validateLearningOperation({ ...body, data: { ...body.data, code: 'x'.repeat(100001) } }))
 })
+
+test('quiz mistake sync derives rows from the current user’s saved attempt', async () => {
+  const rows = new Map()
+  const Model = {
+    findOne: async ({ user }) => structuredClone(rows.get(user) || null),
+    create: async row => { rows.set(row.user, structuredClone(row)); return row },
+  }
+  const attemptId = '507f1f77bcf86cd799439011'
+  const attempt = {
+    _id: attemptId,
+    user: 'alice',
+    createdAt: new Date('2026-10-14T23:00:00.000Z'),
+    quiz: { _id: 'quiz-id', title: 'JavaScript Basics', difficulty: 'Easy', category: { name: 'JavaScript' } },
+    quizSnapshot: { title: 'JavaScript Basics', category: 'JavaScript', difficulty: 'Easy' },
+    answers: [{
+      question: '507f1f77bcf86cd799439012',
+      questionSnapshot: { text: 'Verified question', options: ['No', 'Yes'], correctAnswer: 1, explanation: 'Verified explanation' },
+      selectedOption: 'No',
+    }],
+  }
+  const AttemptModel = {
+    findOne: filter => ({
+      populate() { return this },
+      lean: async () => filter.user === 'alice' ? attempt : null,
+    }),
+  }
+  const auth = (req, res, next) => { req.user = { _id: req.headers['x-test-user'] || 'alice' }; next() }
+  const app = express(); app.use(express.json()); app.use('/learning', createLearningRouter(Model, auth, AttemptModel)); app.use((error, req, res, next) => res.status(error.status || 500).json({ message: error.message }))
+  const server = app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve))
+  const send = (user, body) => fetch(`http://127.0.0.1:${server.address().port}/learning`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-test-user': user },
+    body: JSON.stringify(body),
+  })
+  try {
+    const response = await send('alice', {
+      id: 'quiz-attempt',
+      type: 'quiz',
+      data: { attemptId, day: '2000-01-01', rows: [{ id: 'forged', title: 'Fake', question: { text: 'Fake', options: ['A', 'B'], correctAnswer: 0 }, selectedOption: 'A', resolved: true }] },
+    })
+    assert.equal(response.status, 200)
+    const state = (await response.json()).state
+    assert.equal(state.days['2026-10-14'].length, 1)
+    assert.equal(Object.keys(state.quizMistakes).length, 1)
+    assert.equal(Object.values(state.quizMistakes)[0].question.text, 'Verified question')
+    assert.equal(Object.values(state.quizMistakes)[0].mistakeCount, 1)
+    assert.equal((await send('bob', { id: 'foreign', type: 'quiz', data: { attemptId, day: '2026-10-14', rows: [] } })).status, 404)
+  } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)) }
+})

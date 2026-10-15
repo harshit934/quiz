@@ -219,6 +219,10 @@ export default function App() {
   const [theme, setTheme] = useState(
     () => localStorage.getItem('quizly-theme') === 'dark' ? 'dark' : 'light'
   )
+  const [fontSize, setFontSize] = useState(() => {
+    const saved = localStorage.getItem('quizly-font-size')
+    return ['default', 'large', 'larger'].includes(saved) ? saved : 'default'
+  })
 
   const [adminVerified, setAdminVerified] = useState(false)
 
@@ -307,6 +311,11 @@ export default function App() {
     document.documentElement.dataset.theme = theme
     localStorage.setItem('quizly-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    document.documentElement.dataset.fontSize = fontSize
+    localStorage.setItem('quizly-font-size', fontSize)
+  }, [fontSize])
 
   const toggleTheme = useCallback(() => {
     setTheme(current => current === 'dark' ? 'light' : 'dark')
@@ -1089,6 +1098,11 @@ export default function App() {
       return
     }
 
+    async function retryIncorrect(attemptId) {
+      const retryQuiz = await request(`/attempts/${attemptId}/retry`, { method: 'POST' })
+      await startQuiz({ _id: retryQuiz.id })
+    }
+
     try {
       const detail = await request(
         `/attempts/${attempt._id}`
@@ -1371,6 +1385,8 @@ export default function App() {
         quiz={activeQuiz}
         theme={theme}
         onToggleTheme={toggleTheme}
+        fontSize={fontSize}
+        onFontSizeChange={setFontSize}
         onExit={() =>
           navigate('#explore')
         }
@@ -1410,6 +1426,7 @@ export default function App() {
     content = (
       <ResultPage
         attempt={result}
+        onRetryIncorrect={retryIncorrect}
         onTryAgain={() =>
           result?.quiz &&
           startQuiz(result.quiz)
@@ -1627,12 +1644,15 @@ export default function App() {
 
   return (
     <LearningProvider key={isAuthenticated ? user?.id || user?._id : 'guest'} user={isAuthenticated ? user : null}><div className="app-shell">
+      <a className="skip-link" href="#main-content">Skip to content</a>
       {!immersive && (
         <Navbar
           user={user}
           isAdmin={isAdmin}
           theme={theme}
           onToggleTheme={toggleTheme}
+          fontSize={fontSize}
+          onFontSizeChange={setFontSize}
           route={`#${routeName || 'home'}${
             routeId
               ? `/${routeId}`
@@ -1651,7 +1671,7 @@ export default function App() {
           </div>
         )}
 
-      {content}
+      <div id="main-content" tabIndex="-1">{content}</div>
 
       <Toast
         message={toastMessage}

@@ -10,7 +10,7 @@ import Exam from '../models/Exam.js'
 import Question from '../models/Question.js'
 import Quiz from '../models/Quiz.js'
 import User from '../models/User.js'
-import examRoutes from './exams.js'
+import examRoutes, { canReviewAnswers } from './exams.js'
 import { getExamStatus, getRemainingSeconds, scoreExamAttempt } from '../examService.js'
 
 test('exam lifecycle follows explicit state and configured time window', () => {
@@ -51,6 +51,27 @@ test('exam scoring is server-side, one mark per correct response, with blanks co
   })
 })
 
+test('negative marking is calculated by the server and cannot produce a negative score', () => {
+  const questions = [
+    { question: 'q1', options: ['A', 'B', 'C', 'D'], correctAnswer: 1 },
+    { question: 'q2', options: ['A', 'B', 'C', 'D'], correctAnswer: 2 },
+    { question: 'q3', options: ['A', 'B', 'C', 'D'], correctAnswer: 0 },
+  ]
+  const base = {
+    questions,
+    answers: [
+      { question: 'q1', selectedOption: 'B' },
+      { question: 'q2', selectedOption: 'A' },
+    ],
+    passingPercentage: 10,
+    startedAt: new Date('2026-10-03T10:00:00.000Z'),
+    submittedAt: new Date('2026-10-03T10:01:30.000Z'),
+  }
+  assert.equal(scoreExamAttempt({ ...base, negativeMarking: 0.25 }).score, 0.75)
+  assert.equal(scoreExamAttempt({ ...base, negativeMarking: 1 }).score, 0)
+  assert.equal(scoreExamAttempt({ ...base, negativeMarking: 1 }).percentage, 0)
+})
+
 test('remaining time never drops below zero', () => {
   assert.equal(getRemainingSeconds(new Date('2026-10-03T10:00:00.000Z'), 1, new Date('2026-10-03T10:00:30.000Z')), 30)
   assert.equal(getRemainingSeconds(new Date('2026-10-03T10:00:00.000Z'), 1, new Date('2026-10-03T10:02:00.000Z')), 0)
@@ -60,6 +81,16 @@ test('remaining time never drops below zero', () => {
     new Date('2026-10-03T10:10:00.000Z'),
     new Date('2026-10-03T10:15:00.000Z'),
   ), 300)
+})
+
+test('answer review follows the exam policy and never exposes keys during an active attempt', () => {
+  const exam = { endTime: new Date('2026-10-03T11:00:00.000Z'), reviewPolicy: 'after-end' }
+  const completed = { status: 'completed' }
+  const active = { status: 'in-progress' }
+  assert.equal(canReviewAnswers(active, { ...exam, reviewPolicy: 'after-submit' }, false, new Date('2026-10-03T12:00:00.000Z')), false)
+  assert.equal(canReviewAnswers(completed, exam, false, new Date('2026-10-03T10:30:00.000Z')), false)
+  assert.equal(canReviewAnswers(completed, { ...exam, reviewPolicy: 'after-submit' }, false, new Date('2026-10-03T10:30:00.000Z')), true)
+  assert.equal(canReviewAnswers(completed, exam, false, new Date('2026-10-03T11:00:00.000Z')), true)
 })
 
 test('question bank endpoint requires authentication and administrator role and excludes answer keys', async () => {

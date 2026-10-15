@@ -114,8 +114,20 @@ test('JWT login roles control access to admin APIs', async () => {
     assert.equal(unauthenticated.status, 401)
     const unauthenticatedUsers = await fetch(`${baseUrl}/admin/users`)
     assert.equal(unauthenticatedUsers.status, 401)
+    const unauthenticatedImport = await fetch(`${baseUrl}/admin/questions/import/preview`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ format: 'csv', content: '' }),
+    })
+    assert.equal(unauthenticatedImport.status, 401)
     const learnerQuizStats = await fetch(`${baseUrl}/admin/stats/quizzes`, { headers: { authorization: `Bearer ${learnerData.token}` } })
     assert.equal(learnerQuizStats.status, 403)
+    const learnerImport = await fetch(`${baseUrl}/admin/questions/import/preview`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${learnerData.token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ format: 'csv', content: '' }),
+    })
+    assert.equal(learnerImport.status, 403)
     const learnerCategoryCreate = await fetch(`${baseUrl}/categories`, {
       method: 'POST',
       headers: { authorization: `Bearer ${learnerData.token}`, 'content-type': 'application/json' },

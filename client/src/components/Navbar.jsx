@@ -18,6 +18,8 @@ export default function Navbar({
   onLogout,
   theme,
   onToggleTheme,
+  fontSize = 'default',
+  onFontSizeChange = () => {},
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const links = isAdmin ? [
@@ -63,6 +65,7 @@ export default function Navbar({
           </div>
         </nav>
         <div className="nav-actions">
+          <label className="font-size-control"><span aria-hidden="true">Aa</span><select aria-label="Text size" value={fontSize} onChange={event => onFontSizeChange(event.target.value)}><option value="default">Standard</option><option value="large">Large</option><option value="larger">Larger</option></select></label>
           <button
             className="icon-button theme-toggle"
             type="button"

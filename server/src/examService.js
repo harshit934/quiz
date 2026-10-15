@@ -5,7 +5,7 @@ export function getExamStatus(exam, now = new Date()) {
   return exam.status === 'published' ? 'published' : 'scheduled'
 }
 
-export function scoreExamAttempt({ questions, answers, passingPercentage, startedAt, submittedAt, maxTimeSeconds = Infinity }) {
+export function scoreExamAttempt({ questions, answers, passingPercentage, startedAt, submittedAt, maxTimeSeconds = Infinity, negativeMarking = 0 }) {
   const answerByQuestion = new Map(answers.map(answer => [String(answer.question), answer.selectedOption || '']))
   let correctAnswers = 0
   let wrongAnswers = 0
@@ -19,9 +19,10 @@ export function scoreExamAttempt({ questions, answers, passingPercentage, starte
   }
 
   const totalMarks = questions.length
-  const percentage = totalMarks ? Math.round(correctAnswers / totalMarks * 100) : 0
+  const score = Math.max(0, correctAnswers - wrongAnswers * negativeMarking)
+  const percentage = totalMarks ? Math.round(score / totalMarks * 100) : 0
   return {
-    score: correctAnswers,
+    score,
     totalMarks,
     percentage,
     correctAnswers,

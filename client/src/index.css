@@ -30,6 +30,8 @@
 
 * { box-sizing: border-box; }
 html { min-width: 320px; scroll-behavior: smooth; background: var(--bg); }
+html[data-font-size="large"] { zoom: 1.1; }
+html[data-font-size="larger"] { zoom: 1.2; }
 body { min-width: 320px; min-height: 100vh; margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.55; }
 body, button, input, select, textarea { font-family: 'DM Sans', sans-serif; }
 button, input, select, textarea { font-size: inherit; }
@@ -48,6 +50,11 @@ h1 { margin-bottom: 10px; font-size: 42px; line-height: 1.12; font-weight: 700; 
 h2 { margin-bottom: 7px; font-size: 22px; line-height: 1.25; font-weight: 700; }
 h3 { margin-bottom: 7px; font-size: 16px; line-height: 1.35; font-weight: 700; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.skip-link { position: fixed; z-index: 100; top: 8px; left: 8px; padding: 10px 14px; transform: translateY(-160%); border-radius: 8px; background: var(--accent); color: #11101c; font-weight: 800; }
+.skip-link:focus { transform: translateY(0); }
+.font-size-control { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.font-size-control select, .quiz-font-size-control select { min-height: 34px; padding: 4px 7px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.quiz-font-size-control select { min-width: 48px; }
 
 /* Buttons and shared controls */
 .button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 40px; padding: 0 15px; border: 1px solid transparent; border-radius: 10px; font-weight: 700; font-size: 12px; white-space: nowrap; cursor: pointer; transition: transform .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease; }
@@ -263,6 +270,7 @@ h3 { margin-bottom: 7px; font-size: 16px; line-height: 1.35; font-weight: 700; }
 .quiz-layout { display: grid; grid-template-columns: minmax(0,1fr) 265px; align-items: start; gap: 18px; margin-top: 20px; }
 .question-panel { min-height: 444px; padding: 23px 25px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(145deg, rgba(25,26,37,.97), rgba(18,19,28,.97)); box-shadow: 0 14px 40px rgba(0,0,0,.15); }
 .question-panel-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 27px; }
+.question-extra-actions { display: flex; align-items: center; gap: 12px; }
 .question-index { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid rgba(163,147,255,.24); border-radius: 10px; background: rgba(163,147,255,.1); color: #c4b9ff; font-family: 'Manrope',sans-serif; font-size: 12px; font-weight: 800; }
 .review-toggle { display: inline-flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.02); color: #a8a6b6; font-size: 10px; cursor: pointer; }
 .review-toggle:hover, .review-active { border-color: rgba(239,191,103,.36); background: rgba(239,191,103,.075); color: #efca7b; }
@@ -1457,6 +1465,11 @@ h3 { font-size: 18px; font-weight: 600; }
 .exam-instructions p, .exam-past-attempts p { margin: 7px 0; color: var(--muted); white-space: pre-wrap; }
 .exam-sign-in, .exam-result-summary { display: grid; justify-items: center; text-align: center; }
 .exam-sign-in > svg, .exam-result-summary > svg { color: var(--accent); }
+.exam-review-list { width: 100%; margin: 22px 0; text-align: left; }
+.exam-review-list h3 { margin-bottom: 10px; }
+.exam-review-item { padding: 13px 0; border-top: 1px solid var(--line); }
+.exam-review-item h4 { margin: 0 0 7px; color: var(--ink); font-size: 13px; }
+.exam-review-item p { margin: 5px 0; color: var(--muted); white-space: pre-wrap; }
 .exam-countdown { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid rgba(80,212,208,.27); border-radius: 10px; background: rgba(80,212,208,.07); color: var(--cyan); font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .exam-countdown-warning { border-color: rgba(239,123,130,.35); background: rgba(239,123,130,.08); color: var(--red); }
 .exam-take-layout { display: grid; grid-template-columns: minmax(0,1fr) 250px; align-items: start; gap: 14px; }
@@ -2131,6 +2144,8 @@ h3 { font-size: 18px; font-weight: 600; }
 @media (max-width: 760px) {
   .quiz-header-actions { gap: 5px; }
   .quiz-theme-toggle { width: 33px; height: 35px; }
+  .font-size-control > span { display: none; }
+  .font-size-control select { width: 76px; padding-inline: 4px; }
 }
 .student-exam-taking .exam-question-map > div button.for-review {
   box-shadow: inset 0 -3px #d49b2e;

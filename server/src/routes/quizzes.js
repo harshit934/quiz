@@ -48,7 +48,7 @@ function toQuestionView(question) {
 }
 
 router.get('/', asyncHandler(async (req, res) => {
-  const filter = {}
+  const filter = { isPrivate: { $ne: true } }
   if (req.query.difficulty && ['Easy', 'Medium', 'Hard'].includes(req.query.difficulty)) filter.difficulty = req.query.difficulty
   if (req.query.category) {
     const category = mongoose.isValidObjectId(req.query.category)
@@ -76,13 +76,23 @@ router.get('/', asyncHandler(async (req, res) => {
 }))
 
 router.get('/:id', optionalAuthenticate, asyncHandler(async (req, res) => {
-  const quiz = await Quiz.findById(req.params.id).select('-createdBy -__v').populate('category', 'name slug icon color parentSlug rootSlug').populate({
+  const quiz = await Quiz.findById(req.params.id).select('-__v').populate('category', 'name slug icon color parentSlug rootSlug').populate({
     path: 'questions',
     select: req.user?.role === 'admin' ? 'text options correctAnswer explanation position' : 'text options position',
-    options: { sort: { position: 1 } },
   })
   if (!quiz) return res.status(404).json({ message: 'Quiz not found.' })
-  res.json({ ...quiz.toObject(), questions: quiz.questions.map(toQuestionView) })
+  if (quiz.isPrivate && String(quiz.createdBy) !== String(req.user?._id)) {
+    return res.status(404).json({ message: 'Quiz not found.' })
+  }
+  const questions = quiz.isPrivate
+    ? new Map(quiz.questions.map(question => [String(question._id), question]))
+    : null
+  const orderedQuestions = questions
+    ? quiz.questions.map(question => questions.get(String(question._id)))
+    : [...quiz.questions].sort((first, second) => first.position - second.position)
+  const response = quiz.toObject()
+  delete response.createdBy
+  res.json({ ...response, questions: orderedQuestions.map(toQuestionView) })
 }))
 
 router.post('/:id/submit', authenticate, asyncHandler(async (req, res) => {
@@ -91,6 +101,9 @@ router.post('/:id/submit', authenticate, asyncHandler(async (req, res) => {
     .populate('category', 'name slug icon color parentSlug rootSlug')
     .populate({ path: 'questions', options: { sort: { position: 1 } } })
   if (!quiz) return res.status(404).json({ message: 'Quiz not found.' })
+  if (quiz.isPrivate && String(quiz.createdBy) !== String(req.user._id)) {
+    return res.status(404).json({ message: 'Quiz not found.' })
+  }
   if (!quiz.questions.length) return res.status(400).json({ message: 'This quiz has no questions yet.' })
 
   const questionIds = new Set(quiz.questions.map(question => String(question._id)))

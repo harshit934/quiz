@@ -17,6 +17,7 @@ const attemptSchema = new mongoose.Schema({
       options: [String],
       correctAnswer: { type: Number, required: true },
       explanation: { type: String, default: '' },
+      categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category' },
     },
   }],
   markedQuestions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Question' }],

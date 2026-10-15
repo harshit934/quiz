@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 
 const questionSchema = new mongoose.Schema({
   quiz: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', required: true, index: true },
+  sourceCategory: { type: mongoose.Schema.Types.ObjectId, ref: 'Category' },
   text: { type: String, required: true, trim: true, maxlength: 500 },
   options: {
     type: [{ type: String, required: true, trim: true, maxlength: 180 }],

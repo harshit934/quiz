@@ -13,7 +13,8 @@ import { Badge, CategoryIcon, EmptyState, QuizCard, StatCard } from './component
 import { Pencil, Trash2 } from 'lucide-react'
 import { shuffleQuestionOptions } from './utils/shuffle.js'
 import { authValidationError } from './utils/authValidation.js'
-import LearningPanel, { BookmarkButton, RecordQuizLearning } from './LearningPanel.jsx'
+import LearningPanel, { BookmarkButton, QuestionBookmarkButton, RecordQuizLearning } from './LearningPanel.jsx'
+import { certificateVerificationUrl, downloadCertificate, request } from './services/api.js'
 
 const chartColors = ['#df7254', '#367f76', '#d7a740', '#678bb8', '#4a865f', '#aa789b', '#d58c57']
 const initials = name => (name || '?').split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase()
@@ -178,6 +179,8 @@ export function QuizPage({
   onComplete,
   theme,
   onToggleTheme,
+  fontSize,
+  onFontSizeChange,
 }) {
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState({})
@@ -235,6 +238,25 @@ export function QuizPage({
       : { ...existing, [nextQuestionId]: shuffleQuestionOptions(nextQuestion) })
     setCurrent(nextIndex)
   }
+  useEffect(() => {
+    if (confirm) return undefined
+    const handleQuestionKeys = event => {
+      if (event.altKey || event.ctrlKey || event.metaKey
+        || event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [role="dialog"]')) return
+      if (event.key === 'ArrowLeft' && current > 0) {
+        event.preventDefault()
+        goToQuestion(current - 1)
+      } else if (event.key === 'ArrowRight' && current < questions.length - 1) {
+        event.preventDefault()
+        goToQuestion(current + 1)
+      } else if (/^[1-4]$/.test(event.key)) {
+        const option = loadedQuestion.options[Number(event.key) - 1]
+        if (option) setAnswers(value => ({ ...value, [currentId]: option }))
+      }
+    }
+    window.addEventListener('keydown', handleQuestionKeys)
+    return () => window.removeEventListener('keydown', handleQuestionKeys)
+  }, [confirm, current, currentId, loadedQuestion, questions.length])
   const isMarked = marked.includes(currentId)
   const answered = Boolean(answers[currentId])
   const answeredQuestions = Object.keys(answers).length
@@ -248,6 +270,7 @@ export function QuizPage({
         <div className="quiz-title-block"><span className="eyebrow">{quiz.category?.name} · {quiz.difficulty}</span><h1>{quiz.title}</h1></div>
         <div className="quiz-header-actions">
           <BookmarkButton bookmarkKey={`quiz-${quiz._id || quiz.id}`} item={{ kind: 'quiz', title: quiz.title, quizId: String(quiz._id || quiz.id) }} />
+          <label className="quiz-font-size-control"><span className="sr-only">Text size</span><select aria-label="Text size" value={fontSize} onChange={event => onFontSizeChange(event.target.value)}><option value="default">A</option><option value="large">A+</option><option value="larger">A++</option></select></label>
           <button
             className="icon-button quiz-theme-toggle"
             type="button"
@@ -261,11 +284,12 @@ export function QuizPage({
         </div>
       </div>
       <div className="quiz-progress-row"><span>Question {current + 1} <span className="muted">of {questions.length}</span></span><span>{Math.round(((current + 1) / questions.length) * 100)}% complete</span></div>
+      <p className="sr-only">Keyboard navigation: use the left and right arrow keys to move between questions, and keys 1 through 4 to select an answer.</p>
       <div className="progress-track"><span style={{ width: `${((current + 1) / questions.length) * 100}%` }} /></div>
       <div className="quiz-layout">
         <section className="question-column">
           <article className="question-panel">
-            <div className="question-panel-top"><span className="question-index">{String(current + 1).padStart(2, '0')}</span><button className={`review-toggle ${isMarked ? 'review-active' : ''}`} aria-pressed={isMarked} onClick={() => setMarked(list => isMarked ? list.filter(id => id !== currentId) : [...list, currentId])}><Flag size={15} /> {isMarked ? 'Marked for review' : 'Mark for review'}</button></div>
+            <div className="question-panel-top"><span className="question-index">{String(current + 1).padStart(2, '0')}</span><div className="question-extra-actions"><QuestionBookmarkButton questionId={currentId} /><button className={`review-toggle ${isMarked ? 'review-active' : ''}`} aria-pressed={isMarked} onClick={() => setMarked(list => isMarked ? list.filter(id => id !== currentId) : [...list, currentId])}><Flag size={15} /> {isMarked ? 'Marked for review' : 'Mark for review'}</button></div></div>
             <p className="eyebrow">Choose one answer</p><h2>{question.text}</h2>
             <div className="answer-list" role="group" aria-label="Answer options">{loadedQuestion.options.map((option, index) => {
               const selected = answers[currentId] === option
@@ -297,8 +321,13 @@ function resultAnswers(attempt) {
   })).filter(item => item.question)
 }
 
-export function ResultPage({ attempt, onTryAgain, onExplore, onDashboard }) {
+export function ResultPage({ attempt, onTryAgain, onRetryIncorrect, onExplore, onDashboard }) {
   const [showReview, setShowReview] = useState(true)
+  const [certificateStatus, setCertificateStatus] = useState('')
+  const [certificateId, setCertificateId] = useState('')
+  const [retryingIncorrect, setRetryingIncorrect] = useState(false)
+  const [retryError, setRetryError] = useState('')
+  useEffect(() => { setCertificateStatus(''); setCertificateId('') }, [attempt?._id])
   if (!attempt) return <main className="page-width page-main"><EmptyState title="No result selected" detail="Complete a quiz to see your results here." action={<button className="button button-primary" onClick={onExplore}>Explore quizzes</button>} /></main>
   const rows = resultAnswers(attempt)
   const correct = attempt.correctCount ?? attempt.score ?? 0
@@ -308,11 +337,37 @@ export function ResultPage({ attempt, onTryAgain, onExplore, onDashboard }) {
   const chartData = [{ name: 'Correct', value: correct }, { name: 'Incorrect', value: incorrect }, { name: 'Unanswered', value: unanswered }]
   const quiz = attempt.quiz || attempt.quizSnapshot || {}
   const duration = attempt.timeTaken || 0
+  const certificateEligible = attempt.percentage >= 80 && /^[a-f\d]{24}$/i.test(String(attempt._id || ''))
+  async function getCertificate() {
+    setCertificateStatus('Preparing your certificate…')
+    try {
+      const certificate = await request('/certificates', {
+        method: 'POST',
+        body: JSON.stringify({ sourceType: 'quiz', attemptId: attempt._id }),
+      })
+      await downloadCertificate(certificate.certificateId)
+      setCertificateId(certificate.certificateId)
+      setCertificateStatus(`Certificate ${certificate.certificateId} downloaded. Verify it online.`)
+    } catch (error) {
+      setCertificateStatus(`Certificate download failed. ${error.message}`)
+    }
+    async function retryMissedQuestions() {
+      setRetryingIncorrect(true)
+      setRetryError('')
+      try {
+        await onRetryIncorrect?.(attempt._id)
+      } catch (error) {
+        setRetryError(`Could not start the retry quiz. ${error.message}`)
+      } finally {
+        setRetryingIncorrect(false)
+      }
+    }
+  }
   return (
     <main className="page-width page-main result-page">
       <RecordQuizLearning attempt={attempt} />
       <div className="result-heading"><span className={`result-status ${attempt.passed ? 'status-pass' : 'status-try'}`}>{attempt.passed ? <CheckCircle2 size={16} /> : <Activity size={16} />}{attempt.passed ? 'Strong work' : 'Keep building'}</span><p className="eyebrow">Your session is complete</p><h1>Quiz complete<span className="brand-period">.</span></h1><p className="muted">A clear picture of what clicked and where to focus next.</p></div>
-      <section className="score-hero"><div className="score-ring" style={{ '--score': `${attempt.percentage || 0}%` }}><div><strong>{attempt.percentage || 0}<small>%</small></strong><span>accuracy</span></div></div><div className="score-story"><p className="eyebrow">{quiz.category?.name || 'Quiz result'} · {quiz.difficulty || ''}</p><h2>{quiz.title || 'Quiz result'}</h2><p className="muted">{attempt.passed ? 'You reached the 60% pass mark. Keep your momentum going.' : 'Every result is a useful baseline. Review a few questions and try again.'}</p><div className="score-actions"><button className="button button-primary" onClick={onTryAgain}>Try again <ArrowRight size={16} /></button><button className="button button-outline" onClick={() => document.getElementById('question-review')?.scrollIntoView({ behavior: 'smooth' })}><BookOpenCheck size={15} /> Review answers</button><button className="button button-quiet" onClick={onDashboard}>Open dashboard</button></div></div><div className="score-total"><span>Total score</span><strong>{correct}<i>/{rows.length || quiz.totalQuestions || 0}</i></strong><span>{attempt.passed ? 'Pass' : 'Not passed yet'}</span></div></section>
+      <section className="score-hero"><div className="score-ring" style={{ '--score': `${attempt.percentage || 0}%` }}><div><strong>{attempt.percentage || 0}<small>%</small></strong><span>accuracy</span></div></div><div className="score-story"><p className="eyebrow">{quiz.category?.name || 'Quiz result'} · {quiz.difficulty || ''}</p><h2>{quiz.title || 'Quiz result'}</h2><p className="muted">{attempt.passed ? 'You reached the 60% pass mark. Keep your momentum going.' : 'Every result is a useful baseline. Review a few questions and try again.'}</p><div className="score-actions"><button className="button button-primary" onClick={onTryAgain}>Try again <ArrowRight size={16} /></button>{incorrect > 0 && /^[a-f\d]{24}$/i.test(String(attempt._id || '')) && <button className="button button-outline" disabled={retryingIncorrect} onClick={retryMissedQuestions}>{retryingIncorrect ? 'Preparing…' : `Retry incorrect (${incorrect})`}</button>}<button className="button button-outline" onClick={() => document.getElementById('question-review')?.scrollIntoView({ behavior: 'smooth' })}><BookOpenCheck size={15} /> Review answers</button>{certificateEligible && <button className="button button-quiet" onClick={getCertificate}>Download certificate</button>}<button className="button button-quiet" onClick={onDashboard}>Open dashboard</button></div>{retryError && <p className="form-error" role="alert">{retryError}</p>}{certificateStatus && <p className="muted" role="status">{certificateStatus}{certificateId && <a href={certificateVerificationUrl(certificateId)} target="_blank" rel="noreferrer"> Verify certificate</a>}</p>}</div><div className="score-total"><span>Total score</span><strong>{correct}<i>/{rows.length || quiz.totalQuestions || 0}</i></strong><span>{attempt.passed ? 'Pass' : 'Not passed yet'}</span></div></section>
       <div className="stats-grid result-stats"><StatCard icon={CheckCircle2} label="Correct" value={correct} detail="Well remembered" accent="green" /><StatCard icon={XCircle} label="Incorrect" value={incorrect} detail="Worth revisiting" accent="rose" /><StatCard icon={CircleHelpIcon} label="Unanswered" value={unanswered} detail="Could be a next step" accent="amber" /><StatCard icon={Clock3} label="Time taken" value={`${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, '0')}`} detail="Minutes : seconds" accent="blue" /></div>
       <section className="result-analysis"><div className="chart-panel result-chart"><div className="panel-heading"><div><p className="eyebrow">At a glance</p><h2>Answer breakdown</h2></div></div><div className="result-chart-body"><div className="result-donut"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={chartData} dataKey="value" innerRadius="68%" outerRadius="88%" paddingAngle={4} stroke="none">{scoreData.map(item => <Cell key={item.name} fill={item.fill} />)}</Pie><Tooltip contentStyle={{ background: '#fffdf8', border: '1px solid #e8e1d4', borderRadius: 12, color: '#263a36' }} /></PieChart></ResponsiveContainer><div><strong>{attempt.percentage || 0}%</strong><span>correct</span></div></div><div className="breakdown-legend">{scoreData.map(item => <div key={item.name}><span><i style={{ background: item.fill }} />{item.name}</span><strong>{item.value}</strong></div>)}</div></div></div><div className="chart-panel category-insight"><div className="panel-heading"><div><p className="eyebrow">Keep learning</p><h2>What to revisit</h2></div><span className="insight-icon"><BookOpenCheck size={18} /></span></div><p className="muted">{incorrect + unanswered ? `${incorrect + unanswered} question${incorrect + unanswered === 1 ? '' : 's'} to revisit can help turn this into a stronger result.` : 'A perfect round. Try a harder quiz to keep stretching your knowledge.'}</p><div className="insight-meter"><span style={{ width: `${attempt.percentage || 0}%` }} /></div><div className="insight-meta"><span>Session accuracy</span><strong>{attempt.percentage || 0}%</strong></div><button className="text-button" onClick={onExplore}>Find another quiz <ArrowRight size={15} /></button></div></section>
       <section id="question-review" className="review-section"><div className="section-heading review-heading"><div><p className="eyebrow">Learn from the details</p><h2>Question review</h2></div><button className="button button-quiet" onClick={() => setShowReview(value => !value)}>{showReview ? 'Hide review' : 'Show review'} <ChevronDown className={showReview ? 'rotate-chevron' : ''} size={16} /></button></div>{showReview && <div className="review-list">{rows.map((row, index) => {

@@ -14,6 +14,8 @@ import leaderboardRoutes from './routes/leaderboard.js'
 import adminRoutes from './routes/admin.js'
 import codingRoutes from './routes/coding.js'
 import learningRoutes from './routes/learning.js'
+import bookmarkRoutes from './routes/bookmarks.js'
+import certificateRoutes from './routes/certificates.js'
 
 import User from './models/User.js'
 import Quiz from './models/Quiz.js'
@@ -220,6 +222,16 @@ app.use(
 app.use(
   '/api/attempts',
   attemptRoutes
+)
+
+app.use(
+  '/api/bookmarks',
+  bookmarkRoutes
+)
+
+app.use(
+  '/api/certificates',
+  certificateRoutes
 )
 
 app.use(

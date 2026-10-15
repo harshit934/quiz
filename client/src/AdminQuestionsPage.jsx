@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ArrowLeft, BookOpenCheck } from 'lucide-react'
 import { EmptyState } from './components/ui.jsx'
+import { request } from './services/api.js'
 
 const blankQuestion = () => ({ text: '', options: ['', '', '', ''], correctAnswer: 0, explanation: '' })
 const questionId = question => question._id || question.id
@@ -12,6 +13,75 @@ export default function AdminQuestionsPage({ quizzes, onLoadQuiz, onSaveQuestion
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [importFile, setImportFile] = useState(null)
+  const [importPreview, setImportPreview] = useState(null)
+  const [importError, setImportError] = useState('')
+  const [importBusy, setImportBusy] = useState(false)
+  const [importResult, setImportResult] = useState(null)
+
+  async function readImportFile(file) {
+    setImportFile(null)
+    setImportPreview(null)
+    setImportResult(null)
+    setImportError('')
+    if (!file) return
+    const extension = file.name.split('.').pop()?.toLowerCase()
+    if (!['csv', 'json'].includes(extension) || file.size > 700_000) {
+      setImportError('Choose a CSV or JSON file smaller than 700 KB.')
+      return
+    }
+    try {
+      setImportFile({ name: file.name, format: extension, content: await file.text() })
+    } catch (fileError) {
+      setImportError(`The file could not be read. ${fileError.message}`)
+    }
+  }
+
+  async function previewImport() {
+    if (!importFile) return
+    setImportBusy(true)
+    setImportError('')
+    setImportPreview(null)
+    setImportResult(null)
+    try {
+      const preview = await fetchImport('/preview')
+      setImportPreview(preview)
+    } catch (previewError) {
+      setImportError(previewError.message)
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
+  async function commitImport() {
+    if (!importFile || !importPreview?.valid) return
+    setImportBusy(true)
+    setImportError('')
+    try {
+      const result = await fetchImport('/commit')
+      setImportResult(result)
+      setImportPreview(null)
+      setImportFile(null)
+      if (selectedQuiz) {
+        try {
+          setSelectedQuiz(await onLoadQuiz(selectedQuiz))
+        } catch (refreshError) {
+          setImportError(`Questions were imported, but the current list could not refresh. ${refreshError.message}`)
+        }
+      }
+    } catch (commitError) {
+      setImportError(commitError.message)
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
+  async function fetchImport(action) {
+    return request(`/admin/questions/import${action}`, {
+      method: 'POST',
+      body: JSON.stringify({ format: importFile.format, content: importFile.content }),
+    })
+  }
 
   async function chooseQuiz(quiz) {
     setLoading(true)
@@ -56,6 +126,23 @@ export default function AdminQuestionsPage({ quizzes, onLoadQuiz, onSaveQuestion
         <button className="button button-quiet" onClick={() => onNavigate('#admin/quizzes')}><ArrowLeft size={15} /> Manage quizzes</button>
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
+      <section className="admin-table-panel admin-import-panel" aria-labelledby="bulk-import-title">
+        <div className="admin-table-heading"><div><p className="eyebrow">Question bank</p><h2 id="bulk-import-title">Bulk import</h2></div></div>
+        <p className="muted">Preview a JSON batch or CSV rows. Each row must match an existing quiz by category slug, exact title, and difficulty. CSV headers: categorySlug,title,difficulty,text,optionA,optionB,optionC,optionD,correctAnswer,explanation (answer key A–D or 0–3).</p>
+        <label className="field-label">CSV or JSON file<input type="file" accept=".csv,.json,text/csv,application/json" onChange={event => readImportFile(event.target.files?.[0])} /></label>
+        {importFile && <p role="status">Selected: {importFile.name}</p>}
+        {importError && <p className="form-error" role="alert">{importError}{importError.details?.map(item => <span key={`${item.path}-${item.row}`}>{item.row ? ` Row ${item.row}: ` : ' '}{item.path} {item.message}</span>)}</p>}
+        {importPreview && <div className="admin-import-preview" aria-live="polite">
+          <p>{importPreview.valid ? `${importPreview.questionCount} new questions across ${importPreview.quizCount} quizzes are ready to import.` : 'Resolve these validation issues, then select and preview the corrected file.'}</p>
+          {importPreview.errors?.map((item, index) => <p className="form-error" key={`${item.path}-${index}`}>{item.row ? `Row ${item.row}: ` : ''}{item.path} {item.message}</p>)}
+          {importPreview.duplicates?.flatMap(quiz => quiz.questions.map(text => <p className="muted" key={`${quiz.categorySlug}-${quiz.title}-${text}`}>Already exists and will be skipped: {text} ({quiz.title})</p>))}
+        </div>}
+        {importResult && <p className="admin-import-success" role="status">Imported {importResult.insertedQuestionCount} questions. Existing duplicate questions were skipped.</p>}
+        <div className="admin-question-actions">
+          <button className="button button-quiet" disabled={!importFile || importBusy} onClick={previewImport}>{importBusy ? 'Working…' : 'Preview import'}</button>
+          <button className="button button-primary" disabled={!importPreview?.valid || importBusy} onClick={commitImport}>Import validated questions</button>
+        </div>
+      </section>
       {!selectedQuiz ? (
         <section className="admin-table-panel">
           <div className="admin-table-heading">

@@ -1,12 +1,43 @@
 .learning-panel { margin: 24px 0; padding: 24px; border: 1px solid var(--border, #c9c5bb); border-radius: 16px; }
 .learning-heading, .learning-bookmark { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .learning-plan { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin: 20px 0; }
+.learning-gamification { padding: 14px; border: 1px solid var(--border, #c9c5bb); border-radius: 12px; }
+.learning-gamification p { margin-bottom: 8px; }
+.learning-gamification progress { width: 100%; }
+.learning-challenges { display: grid; gap: 5px; margin-top: 9px; color: var(--muted); }
 .learning-panel select { display: block; margin-top: 8px; padding: 8px; color: inherit; background: var(--surface, transparent); }
+.learning-filters { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.learning-filters label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
 .learning-panel h3 { margin-top: 24px; }
+.learning-recommendations { display: grid; gap: 9px; }
+.learning-recommendation { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--border, #c9c5bb); }
+.learning-recommendation > div { display: grid; flex: 1; gap: 4px; }
+.learning-recommendation span, .learning-recommendation p, .learning-recommendation small { color: var(--muted); }
+.learning-recommendation p { margin: 0; }
+.learning-recommendation progress { width: min(100%, 320px); }
+.learning-weak-areas { display: grid; gap: 8px; }
+.learning-weak-areas article { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.learning-weak-areas article > div { display: grid; flex: 1; gap: 4px; }
+.learning-weak-areas span { color: var(--muted); font-size: 12px; }
+.learning-weak-areas progress { width: min(100%, 360px); }
 .learning-mistake, .learning-bookmark { border-top: 1px solid var(--border, #c9c5bb); padding: 16px 0; }
+.learning-saved-question { display: grid; gap: 7px; padding: 14px 0; border-top: 1px solid var(--border, #c9c5bb); }
+.learning-saved-question > label { display: flex; align-items: flex-start; gap: 9px; }
+.learning-custom-practice { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin: 14px 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
+.learning-custom-practice > label { display: flex; align-items: center; gap: 7px; color: var(--muted); }
+.learning-custom-practice input[type='checkbox'], .learning-saved-question input[type='checkbox'] { accent-color: var(--accent); }
+.admin-import-panel { margin-bottom: 24px; }
+.admin-import-preview { max-height: 260px; overflow: auto; margin: 12px 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.admin-import-preview p { margin: 4px 0; overflow-wrap: anywhere; }
+.admin-import-success { color: var(--green); }
+.learning-saved-question > span { color: var(--muted); font-size: 12px; }
+.learning-saved-question > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.question-bookmark-control { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.question-bookmark-control [role='alert'] { max-width: 220px; color: var(--red); font-size: 11px; }
 .learning-mistake summary { cursor: pointer; font-weight: 600; }
 .learning-mistake fieldset { margin: 16px 0; padding: 16px; }
 .learning-mistake fieldset label { display: block; margin: 12px 0; }
+.learning-mistake > button { margin: 4px 8px 4px 0; }
 .learning-mistake input { margin-right: 8px; }
 .coding-hints { margin: 16px 0; padding: 16px; border: 1px solid var(--border, #c9c5bb); border-radius: 12px; }
-@media (max-width: 600px) { .learning-plan { grid-template-columns: 1fr; } .learning-panel { padding: 16px; } }
+@media (max-width: 600px) { .learning-plan { grid-template-columns: 1fr; } .learning-panel { padding: 16px; } .learning-recommendation { align-items: flex-start; flex-direction: column; } }

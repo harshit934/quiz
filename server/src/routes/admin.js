@@ -8,11 +8,13 @@ import Category from '../models/Category.js'
 import Attempt from '../models/Attempt.js'
 import { authenticate, requireAdmin } from '../middleware/auth.js'
 import asyncHandler from '../middleware/asyncHandler.js'
+import adminImportRoutes from './adminImport.js'
 
 const router = Router()
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 router.use(authenticate, requireAdmin)
+router.use('/questions/import', adminImportRoutes)
 
 router.get('/stats', asyncHandler(async (req, res) => {
   const [users, quizzes, questions, attempts, performance, recentAttempts] = await Promise.all([

@@ -36,6 +36,22 @@ Java, Node.js, Git and cloud Bash exercises use an optional isolated Judge0 comp
 
 The list shows difficulty, passed tests, score and status. **New attempt** generates another variation; running tests retains the question for debugging. **Save code** and **Resume saved code** retain native-language drafts. Practice progress and attempt sequence persist in browser storage; results are local and are not graded quiz or exam attempts.
 
+## Scheduled exams
+
+Administrators can configure exam duration, scheduling, question/option shuffling, and optional negative marking (0–1 point deducted per incorrect answer; unanswered questions are not penalized). Answer review is hidden until the exam closes by default; admins can instead allow review immediately after each submission. Exam attempts resume from their server-saved answers, auto-submit at the server-enforced deadline, and warn before leaving the active exam page.
+
+## Learning recommendations and rewards
+
+The learner dashboard recommends quizzes using the most recent 30 server-graded attempts. Subject averages below 70% are prioritized, and the suggested difficulty adjusts to recent performance (Easy below 55%, Medium below 80%, otherwise Hard). New learners receive featured starting quizzes. XP is awarded from verified quiz results once per user and quiz; distinct-quiz daily and weekly challenges award their XP once per UTC day/week. Levels advance every 100 XP, and the quiz streak is calculated from server-recorded completion dates.
+
+Questions can be saved from an authenticated quiz attempt and managed in the learner panel by subject, topic, and difficulty. The Mistake Notebook is deduplicated by question, increments its repeat count from saved server-graded attempts, and supports retry, resolve, filtering, and removal. Mistake sync verifies the attempt belongs to the signed-in account and derives answer data from the stored attempt rather than trusting the browser payload.
+
+Learners can build private practice quizzes from their bookmarks or retry only the incorrect answers in an owned attempt. These quizzes use server-graded attempts but do not award XP or challenge rewards. Topic-wise weak areas are calculated from saved question snapshots and server-graded responses; the dashboard also includes daily goals, progress charts, and answer explanations.
+
+The admin question page accepts CSV and version-1 JSON question batches. CSV columns are `categorySlug,title,difficulty,text,optionA,optionB,optionC,optionD,correctAnswer,explanation`; answer keys may be A–D or 0–3. Imports can be previewed before commit, report invalid/duplicate rows, and commit questions and quiz references in a MongoDB transaction. Transactional import requires a replica set (including MongoDB Atlas); a standalone MongoDB server cannot provide the required atomicity.
+
+Eligible learners can download certificates for server-verified quiz attempts scoring at least 80%, or completed and passed exams scoring at least 80%. Each certificate has a unique verification ID; certificates are completion records, not accredited qualifications. The app also provides an adjustable text-size preference, keyboard navigation and a skip link, with reduced-motion support.
+
 ## Development commands
 
 - `npm run dev` starts the client and API.

@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { EmptyState, LoadingState } from './components/ui.jsx'
 import ExamCameraMonitor from './components/ExamCameraMonitor.jsx'
-import { getToken, request } from './services/api.js'
+import { certificateVerificationUrl, downloadCertificate, getToken, request } from './services/api.js'
 
 const formatDate = value => new Date(value).toLocaleString()
 const formatClock = seconds => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`
@@ -26,14 +26,27 @@ export default function ExamsPage({ route = [], user, navigate }) {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
+  const [confirmStart, setConfirmStart] = useState(false)
   const [accessCode, setAccessCode] = useState('')
   const [starting, setStarting] = useState(false)
+  const [certificateStatus, setCertificateStatus] = useState('')
+  const [certificateId, setCertificateId] = useState('')
   const startPending = useRef(false)
   const submitStarted = useRef(false)
 
   const [examId, action, attemptId] = route
   const activeAttempt = exam?.attempts?.find(item => item.status === 'in-progress')
   const remainingAttempts = exam ? exam.maxAttempts - (exam.attempts?.length || 0) : 0
+
+  useEffect(() => {
+    if (attempt?.status !== 'in-progress') return undefined
+    const warnBeforeLeave = event => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnBeforeLeave)
+    return () => window.removeEventListener('beforeunload', warnBeforeLeave)
+  }, [attempt?.status])
 
   useEffect(() => {
     if (!authenticated) {
@@ -161,12 +174,29 @@ export default function ExamsPage({ route = [], user, navigate }) {
       setAttempt(started)
       setAnswers(started.answers || [])
       setRemaining(started.remainingSeconds || 0)
+      setConfirmStart(false)
       navigate(`#exams/${examId}/attempt/${started._id}`)
     } catch (startError) {
       setError(startError.name === 'AbortError' ? 'The exam server is taking longer than expected. Try again to resume your attempt.' : startError.message)
     } finally {
       startPending.current = false
       setStarting(false)
+    }
+  }
+
+  async function getExamCertificate() {
+    if (!attempt || attempt.status !== 'completed' || !attempt.passed || attempt.percentage < 80) return
+    setCertificateStatus('Preparing your certificate…')
+    try {
+      const certificate = await request('/certificates', {
+        method: 'POST',
+        body: JSON.stringify({ sourceType: 'exam', attemptId: attempt._id }),
+      })
+      await downloadCertificate(certificate.certificateId)
+      setCertificateId(certificate.certificateId)
+      setCertificateStatus(`Certificate ${certificate.certificateId} downloaded.`)
+    } catch (certificateError) {
+      setCertificateStatus(`Certificate download failed. ${certificateError.message}`)
     }
   }
 
@@ -210,12 +240,12 @@ export default function ExamsPage({ route = [], user, navigate }) {
           <button className="back-link exam-back" onClick={() => navigate('#exams')}><ArrowLeft size={15} /> All exams</button>
           <section className="exam-panel student-exam-detail"><div className="student-exam-card-top"><span className={`exam-status exam-status-${exam.status}`}>{exam.status}</span><span>{exam.difficulty}</span></div><p className="eyebrow">{exam.category?.name || 'Exam'}</p><h1>{exam.title}</h1><p className="muted">{exam.description}</p>
             <div className="student-exam-meta"><span><ListChecks size={15} /> {exam.questionCount} questions</span><span><Clock3 size={15} /> {exam.duration} minutes</span><span><CalendarClock size={15} /> {formatDate(exam.startTime)} – {formatDate(exam.endTime)}</span></div>
-            <div className="exam-instructions"><h2>Instructions</h2><p>{exam.instructions || 'Answer each question before the exam timer expires. Your score is calculated after submission.'}</p><p>Allowed attempts: {exam.maxAttempts}. Passing score: {exam.passingPercentage}%.</p></div>
+            <div className="exam-instructions"><h2>Instructions</h2><p>{exam.instructions || 'Answer each question before the exam timer expires. Your score is calculated after submission.'}</p><p>Allowed attempts: {exam.maxAttempts}. Passing score: {exam.passingPercentage}%.</p>{exam.negativeMarking > 0 && <p>Each incorrect answer deducts {exam.negativeMarking} point(s); unanswered questions are not penalized.</p>}</div>
             {exam.attempts?.length > 0 && <section className="exam-past-attempts"><h3>Your attempts</h3>{exam.attempts.map(item => <p key={item._id}>Attempt {item.attemptNumber}: {item.status}{item.percentage == null ? '' : ` · ${item.percentage}%`}</p>)}</section>}
             <div className="exam-action-row">
               {exam.requiresAccessCode && exam.registration && exam.status === 'live' && !activeAttempt && remainingAttempts > 0 && <label className="field-label">Exam access code<input maxLength="32" autoComplete="off" placeholder="Enter the code from your admin" value={accessCode} onChange={event => setAccessCode(event.target.value.toUpperCase())} /></label>}
               {!exam.registration && <button className="button button-primary" onClick={register}>Register for exam</button>}
-              {exam.registration && exam.status === 'live' && !activeAttempt && remainingAttempts > 0 && <button className="button button-primary" disabled={starting} onClick={startAttempt}>{starting ? 'Starting exam…' : 'Start attempt'}</button>}
+              {exam.registration && exam.status === 'live' && !activeAttempt && remainingAttempts > 0 && <button className="button button-primary" disabled={starting} onClick={() => setConfirmStart(true)}>{starting ? 'Starting exam…' : 'Start attempt'}</button>}
               {starting && <span className="muted" role="status">Connecting to the exam server. Please wait.</span>}
               {activeAttempt && <button className="button button-primary" onClick={() => navigate(`#exams/${exam._id}/attempt/${activeAttempt._id}`)}>Continue attempt</button>}
               {exam.registration && remainingAttempts <= 0 && !activeAttempt && <span className="muted">No attempts remaining.</span>}
@@ -229,7 +259,11 @@ export default function ExamsPage({ route = [], user, navigate }) {
         <>
           {!completed && <ExamCameraMonitor key={attempt._id} />}
           <header className="exam-take-heading"><div><p className="eyebrow">{exam?.title || 'Exam attempt'} · Attempt {attempt.attemptNumber}</p><h1>{completed ? 'Attempt submitted' : 'Exam in progress'}</h1></div><div className={`exam-countdown ${remaining < 300 ? 'exam-countdown-warning' : ''}`}><Clock3 size={19} /><span>{formatClock(remaining)}</span></div></header>
-          {completed ? <section className="exam-panel exam-result-summary"><CheckCircle2 size={28} /><h2>{attempt.passed ? 'You passed' : 'Attempt complete'}</h2><p className="exam-result-score">{attempt.score} / {attempt.totalMarks} <span>({attempt.percentage}%)</span></p><p className="muted">Correct {attempt.correctAnswers} · Wrong {attempt.wrongAnswers} · Unanswered {attempt.unanswered}</p><button className="button button-quiet" onClick={() => navigate(`#exams/${examId}`)}>Back to exam</button></section> : currentQuestion && (
+          {completed ? <section className="exam-panel exam-result-summary"><CheckCircle2 size={28} /><h2>{attempt.passed ? 'You passed' : 'Attempt complete'}</h2><p className="exam-result-score">{attempt.score} / {attempt.totalMarks} <span>({attempt.percentage}%)</span></p><p className="muted">Correct {attempt.correctAnswers} · Wrong {attempt.wrongAnswers} · Unanswered {attempt.unanswered}</p><p className="muted">Time taken {formatClock(attempt.timeTaken || 0)}</p>{attempt.status === 'completed' && attempt.passed && attempt.percentage >= 80 && <button className="button button-primary" onClick={getExamCertificate}>Download certificate</button>}{certificateStatus && <p className="muted" role="status">{certificateStatus}{certificateId && <a href={certificateVerificationUrl(certificateId)} target="_blank" rel="noreferrer"> Verify certificate</a>}</p>}{attempt.questions?.some(question => Number.isInteger(question.correctAnswer)) ? <section className="exam-review-list" aria-label="Question-by-question exam review"><h3>Answer review</h3>{attempt.questions.map((question, index) => {
+              const answer = attempt.answers?.find(item => item.questionId === question.id)
+              const correct = question.options[question.correctAnswer]
+              return <article className="exam-review-item" key={question.id}><h4>{index + 1}. {question.text}</h4><p>Your answer: {answer?.selectedOption || 'Unanswered'}</p><p>Correct answer: {correct}</p>{question.explanation && <p>{question.explanation}</p>}</article>
+            })}</section> : <p className="muted">Answers and explanations will be available after the exam closes.</p>}<button className="button button-quiet" onClick={() => navigate(`#exams/${examId}`)}>Back to exam</button></section> : currentQuestion && (
             <div className="exam-take-layout">
               <section className="exam-panel exam-question-panel">
                 <div className="exam-question-progress"><span>Question {questionIndex + 1} of {attempt.questions.length}</span><button className={`exam-review-toggle ${currentAnswer?.markedForReview ? 'marked' : ''}`} onClick={() => setAnswer(currentQuestion.id, { markedForReview: !currentAnswer?.markedForReview })}><Bookmark size={15} /> {currentAnswer?.markedForReview ? 'Marked' : 'Mark for review'}</button></div>
@@ -246,7 +280,8 @@ export default function ExamsPage({ route = [], user, navigate }) {
         </>
       )}
 
-      {confirmSubmit && <div className="exam-modal-backdrop"><section className="exam-panel exam-submit-confirm"><h2>Submit this attempt?</h2><p className="muted">You can’t change answers after submission. Unanswered questions will be scored as blank.</p><div className="exam-action-row"><button className="button button-quiet" onClick={() => setConfirmSubmit(false)}>Keep working</button><button className="button button-primary" disabled={submitting} onClick={() => submitAttempt(false)}>Submit exam</button></div></section></div>}
+      {confirmStart && <div className="exam-modal-backdrop"><section className="exam-panel exam-submit-confirm" role="dialog" aria-modal="true" aria-labelledby="exam-start-title"><h2 id="exam-start-title">Start this exam now?</h2><p className="muted">The {exam?.duration}-minute timer starts immediately. Your answers are saved as you work, and the exam submits automatically when time runs out. Leaving this page will trigger a warning.</p>{exam?.instructions && <div className="exam-instructions"><h3>Exam instructions</h3><p>{exam.instructions}</p></div>}<div className="exam-action-row"><button className="button button-quiet" onClick={() => setConfirmStart(false)}>Not yet</button><button className="button button-primary" disabled={starting} onClick={startAttempt}>{starting ? 'Starting…' : 'Start exam'}</button></div></section></div>}
+      {confirmSubmit && <div className="exam-modal-backdrop"><section className="exam-panel exam-submit-confirm" role="dialog" aria-modal="true" aria-labelledby="exam-submit-title"><h2 id="exam-submit-title">Submit this attempt?</h2><p className="muted">You can’t change answers after submission. Unanswered questions will be scored as blank.</p><div className="exam-action-row"><button className="button button-quiet" onClick={() => setConfirmSubmit(false)}>Keep working</button><button className="button button-primary" disabled={submitting} onClick={() => submitAttempt(false)}>Submit exam</button></div></section></div>}
     </main>
   )
 }

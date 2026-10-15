@@ -11,7 +11,7 @@ import Question from '../models/Question.js'
 import { authenticate, requireAdmin } from '../middleware/auth.js'
 import asyncHandler from '../middleware/asyncHandler.js'
 import { getExamStatus, getRemainingSeconds, scoreExamAttempt } from '../examService.js'
-import { shuffleQuestionOptions } from '../../../shared/shuffle.js'
+import { fisherYates, shuffleQuestionOptions } from '../../../shared/shuffle.js'
 
 const router = Router()
 const objectId = z.string().regex(/^[a-f\d]{24}$/i)
@@ -25,6 +25,10 @@ const examInput = z.object({
   difficulty: z.enum(['Easy', 'Medium', 'Hard', 'Mixed']),
   questionCount: z.number().int().min(1).max(200),
   duration: z.number().int().min(1).max(600),
+  negativeMarking: z.number().min(0).max(1).default(0),
+  reviewPolicy: z.enum(['after-end', 'after-submit']).default('after-end'),
+  shuffleQuestions: z.boolean().default(false),
+  shuffleOptions: z.boolean().default(true),
   startTime: z.coerce.date(),
   endTime: z.coerce.date(),
   passingPercentage: z.number().min(0).max(100),
@@ -70,6 +74,10 @@ function examView(exam, { includeKeys = false, registration = null, attempts = [
     difficulty: exam.difficulty,
     questionCount: exam.questionCount,
     duration: exam.duration,
+    negativeMarking: exam.negativeMarking ?? 0,
+    reviewPolicy: exam.reviewPolicy || 'after-end',
+    shuffleQuestions: exam.shuffleQuestions ?? false,
+    shuffleOptions: exam.shuffleOptions ?? true,
     startTime: exam.startTime,
     endTime: exam.endTime,
     passingPercentage: exam.passingPercentage,
@@ -128,6 +136,13 @@ async function findExam(examId, { populate = true } = {}) {
   return query.lean()
 }
 
+export function canReviewAnswers(attempt, exam, isAdmin = false, now = new Date()) {
+  return isAdmin || (
+    attempt.status !== 'in-progress'
+    && (exam.reviewPolicy === 'after-submit' || now >= new Date(exam.endTime))
+  )
+}
+
 async function completeAttempt(attempt, exam, status = 'completed', submittedAt = new Date()) {
   if (attempt.status !== 'in-progress') return attempt
   Object.assign(attempt, scoreExamAttempt({
@@ -137,6 +152,7 @@ async function completeAttempt(attempt, exam, status = 'completed', submittedAt 
     startedAt: attempt.startedAt,
     submittedAt,
     maxTimeSeconds: getRemainingSeconds(attempt.startedAt, exam.duration, attempt.startedAt, exam.endTime),
+    negativeMarking: exam.negativeMarking ?? 0,
   }), {
     status,
     submittedAt,
@@ -192,6 +208,7 @@ async function buildQuestionSelection(input) {
     ? { _id: { $in: topics.map(topic => topic._id) } }
     : { $or: [{ rootSlug }, { slug: rootSlug }] }
   const eligibleQuizzes = await Quiz.find({
+    isPrivate: { $ne: true },
     difficulty: input.difficulty === 'Mixed' ? { $in: ['Easy', 'Medium', 'Hard'] } : input.difficulty,
     category: { $in: await Category.find(topicFilter).distinct('_id') },
   }).select('_id difficulty category').lean()
@@ -461,7 +478,7 @@ router.get('/:id/attempt/:attemptId', asyncHandler(async (req, res) => {
   if (attempt.status === 'in-progress' && getRemainingSeconds(attempt.startedAt, exam.duration, new Date(), exam.endTime) === 0) {
     await completeAttempt(attempt, exam, 'expired', attemptDeadline(attempt, exam))
   }
-  res.json(attemptView(attempt, exam, { includeKeys: attempt.status !== 'in-progress' && req.user.role === 'admin' }))
+  res.json(attemptView(attempt, exam, { includeKeys: canReviewAnswers(attempt, exam, req.user.role === 'admin') }))
 }))
 
 router.post('/:id/register', asyncHandler(async (req, res) => {
@@ -499,7 +516,7 @@ router.post('/:id/attempt', asyncHandler(async (req, res) => {
   if (!registration) return res.status(403).json({ message: 'Register for this exam before starting an attempt.' })
   const activeAttempt = await ExamAttempt.findOne({ exam: exam._id, student: req.user._id, status: 'in-progress' })
   if (activeAttempt && getRemainingSeconds(activeAttempt.startedAt, exam.duration, now, exam.endTime) > 0) {
-    return res.json(attemptView(activeAttempt, exam))
+    return res.json(attemptView(activeAttempt, exam, { includeKeys: canReviewAnswers(activeAttempt, exam, req.user.role === 'admin') }))
   }
   if (activeAttempt) await completeAttempt(activeAttempt, exam, 'expired', attemptDeadline(activeAttempt, exam))
   const attemptsUsed = await ExamAttempt.countDocuments({ exam: exam._id, student: req.user._id })
@@ -509,13 +526,13 @@ router.post('/:id/attempt', asyncHandler(async (req, res) => {
     student: req.user._id,
     attemptNumber: attemptsUsed + 1,
     status: 'in-progress',
-    questionSnapshots: exam.questionSnapshots.map(question => shuffleQuestionOptions({
+    questionSnapshots: (exam.shuffleQuestions ? fisherYates(exam.questionSnapshots) : exam.questionSnapshots).map(question => (exam.shuffleOptions ? shuffleQuestionOptions({
       question: question.question,
       text: question.text,
       options: question.options,
       correctAnswer: question.correctAnswer,
       explanation: question.explanation,
-    })),
+    }) : { ...question })),
     totalMarks: exam.questionCount,
     startedAt: now,
   })
@@ -534,7 +551,7 @@ router.put('/:id/attempt/:attemptId/answers', asyncHandler(async (req, res) => {
   if (attempt.status !== 'in-progress') return res.status(409).json({ message: 'This attempt has already been submitted.' })
   if (getRemainingSeconds(attempt.startedAt, exam.duration, new Date(), exam.endTime) === 0) {
     await completeAttempt(attempt, exam, 'expired', attemptDeadline(attempt, exam))
-    return res.json(attemptView(attempt, exam))
+    return res.json(attemptView(attempt, exam, { includeKeys: canReviewAnswers(attempt, exam, req.user.role === 'admin') }))
   }
   const questionById = new Map(attempt.questionSnapshots.map(question => [id(question.question), question]))
   const seen = new Set()
@@ -554,7 +571,7 @@ router.put('/:id/attempt/:attemptId/answers', asyncHandler(async (req, res) => {
     markedForReview: answer.markedForReview,
   }))
   await attempt.save()
-  res.json(attemptView(attempt, exam))
+  res.json(attemptView(attempt, exam, { includeKeys: canReviewAnswers(attempt, exam, req.user.role === 'admin') }))
 }))
 
 router.post('/:id/attempt/:attemptId/submit', asyncHandler(async (req, res) => {
@@ -569,7 +586,7 @@ router.post('/:id/attempt/:attemptId/submit', asyncHandler(async (req, res) => {
   const expired = getRemainingSeconds(attempt.startedAt, exam.duration, new Date(), exam.endTime) === 0
   const submittedAt = expired ? attemptDeadline(attempt, exam) : new Date()
   await completeAttempt(attempt, exam, expired ? 'expired' : 'completed', submittedAt)
-  res.json(attemptView(attempt, exam))
+  res.json(attemptView(attempt, exam, { includeKeys: canReviewAnswers(attempt, exam, req.user.role === 'admin') }))
 }))
 
 router.get('/:id', asyncHandler(async (req, res) => {

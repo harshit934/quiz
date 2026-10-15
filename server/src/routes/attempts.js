@@ -2,10 +2,13 @@ import { Router } from 'express'
 import { z } from 'zod'
 import Attempt from '../models/Attempt.js'
 import Achievement from '../models/Achievement.js'
+import QuizReward from '../models/QuizReward.js'
+import { quizExperience } from '../gamification.js'
 import Quiz from '../models/Quiz.js'
 import Question from '../models/Question.js'
 import { authenticate } from '../middleware/auth.js'
 import asyncHandler from '../middleware/asyncHandler.js'
+import { createPrivatePracticeQuiz } from '../customPractice.js'
 
 const router = Router()
 const submissionSchema = z.object({
@@ -24,8 +27,98 @@ const achievements = [
   { code: 'category-master', title: 'Category master', detail: 'Complete five quizzes in one category with 80% average.', goal: 5 },
 ]
 
+export function createIncorrectRetryRouter({
+  auth = authenticate,
+  AttemptModel = Attempt,
+  QuizModel = Quiz,
+  QuestionModel = Question,
+} = {}) {
+  const retryRouter = Router()
+  retryRouter.post('/:id/retry', auth, asyncHandler(async (req, res) => {
+    const attempt = await AttemptModel.findOne({ _id: req.params.id, user: req.user._id })
+    if (!attempt) return res.status(404).json({ message: 'Quiz result not found.' })
+    const incorrectQuestions = (attempt.answers || [])
+      .filter(answer => {
+        const snapshot = answer.questionSnapshot
+        return snapshot?.options?.[snapshot.correctAnswer]
+          && answer.selectedOption
+          && answer.selectedOption !== snapshot.options[snapshot.correctAnswer]
+      })
+      .map(answer => answer.questionSnapshot)
+    if (!incorrectQuestions.length) {
+      return res.status(409).json({ message: 'This attempt has no incorrect answered questions to retry.' })
+    }
+    const sourceQuiz = await QuizModel.findById(attempt.quiz).select('category difficulty isPrivate createdBy')
+    if (!sourceQuiz || (sourceQuiz.isPrivate && String(sourceQuiz.createdBy) !== String(req.user._id))) {
+      return res.status(404).json({ message: 'Quiz result not found.' })
+    }
+    const quiz = await createPrivatePracticeQuiz({
+      QuizModel,
+      QuestionModel,
+      user: req.user._id,
+      questions: incorrectQuestions,
+      category: sourceQuiz.category,
+      difficulty: sourceQuiz.difficulty,
+      title: `Retry incorrect questions · ${new Date().toISOString().slice(0, 10)}`,
+      description: 'A private practice quiz made from questions answered incorrectly in your verified attempt.',
+    })
+    res.status(201).json({ id: String(quiz._id), title: quiz.title, questionCount: incorrectQuestions.length })
+  }))
+  return retryRouter
+}
+
+router.use(createIncorrectRetryRouter())
+
+async function storeReward({ user, rewardKey, attempt, quiz = null, type, xp, percentage }) {
+  try {
+    await QuizReward.updateOne(
+      { user, rewardKey },
+      { $setOnInsert: { user, rewardKey, attempt, quiz, type, xp, percentage } },
+      { upsert: true },
+    )
+  } catch (error) {
+    if (error.code !== 11000) throw error
+  }
+}
+
+async function awardVerifiedQuizExperience(user, quiz, attempt) {
+  await storeReward({
+    user,
+    rewardKey: `quiz:${quiz}`,
+    attempt: attempt._id,
+    quiz,
+    type: 'quiz',
+    xp: quizExperience(attempt.percentage),
+    percentage: attempt.percentage,
+  })
+  const completedAt = attempt.createdAt || new Date()
+  const dayStart = new Date(Date.UTC(completedAt.getUTCFullYear(), completedAt.getUTCMonth(), completedAt.getUTCDate()))
+  const weekStart = new Date(dayStart)
+  weekStart.setUTCDate(weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7))
+  const publicQuizIds = await Quiz.distinct('_id', { isPrivate: { $ne: true } })
+  const [dailyQuizzes, weeklyQuizzes] = await Promise.all([
+    Attempt.distinct('quiz', { user, quiz: { $in: publicQuizIds }, createdAt: { $gte: dayStart } }),
+    Attempt.distinct('quiz', { user, quiz: { $in: publicQuizIds }, createdAt: { $gte: weekStart } }),
+  ])
+  const dayKey = dayStart.toISOString().slice(0, 10)
+  const weekKey = weekStart.toISOString().slice(0, 10)
+  if (dailyQuizzes.length >= 1) {
+    await storeReward({
+      user, rewardKey: `daily:${dayKey}`, attempt: attempt._id, quiz,
+      type: 'daily-challenge', xp: 5, percentage: attempt.percentage,
+    })
+  }
+  if (weeklyQuizzes.length >= 3) {
+    await storeReward({
+      user, rewardKey: `weekly:${weekKey}`, attempt: attempt._id, quiz,
+      type: 'weekly-challenge', xp: 15, percentage: attempt.percentage,
+    })
+  }
+}
+
 async function syncAchievements(userId, attempt, quiz) {
-  const history = await Attempt.find({ user: userId }).sort({ createdAt: -1 }).select('percentage quiz')
+  const publicQuizIds = await Quiz.distinct('_id', { isPrivate: { $ne: true } })
+  const history = await Attempt.find({ user: userId, quiz: { $in: publicQuizIds } }).sort({ createdAt: -1 }).select('percentage quiz')
   const earned = new Set()
   if (history.length >= 1) earned.add('first-quiz')
   if (attempt.percentage === 100) earned.add('perfect-score')
@@ -34,7 +127,7 @@ async function syncAchievements(userId, attempt, quiz) {
   if (history.length >= 3) earned.add('three-in-a-row')
 
   const categoryAttempts = await Attempt.find({ user: userId })
-    .populate({ path: 'quiz', match: { category: quiz.category }, select: 'category' })
+    .populate({ path: 'quiz', match: { category: quiz.category, isPrivate: { $ne: true } }, select: 'category' })
     .select('percentage quiz')
   const matching = categoryAttempts.filter(item => item.quiz)
   const categoryAverage = matching.length
@@ -52,9 +145,12 @@ async function syncAchievements(userId, attempt, quiz) {
 router.post('/', authenticate, asyncHandler(async (req, res) => {
   const input = submissionSchema.parse(req.body)
   const quiz = await Quiz.findById(input.quizId)
-    .populate('category', 'name')
-    .populate({ path: 'questions', options: { sort: { position: 1 } } })
+    .populate('category', 'name parentSlug')
+    .populate({ path: 'questions', options: { sort: { position: 1 } }, populate: { path: 'sourceCategory', select: '_id' } })
   if (!quiz) return res.status(404).json({ message: 'Quiz not found.' })
+  if (quiz.isPrivate && String(quiz.createdBy) !== String(req.user._id)) {
+    return res.status(404).json({ message: 'Quiz not found.' })
+  }
   if (!quiz.questions.length) return res.status(400).json({ message: 'This quiz has no questions yet.' })
 
   const validIds = new Set(quiz.questions.map(question => String(question._id)))
@@ -86,6 +182,7 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
         options: question.options,
         correctAnswer: question.correctAnswer,
         explanation: question.explanation,
+        categoryId: question.sourceCategory?._id || quiz.category?._id,
       },
     }
   })
@@ -98,6 +195,7 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
     quizSnapshot: {
       title: quiz.title,
       category: quiz.category?.name || '',
+      topic: quiz.category?.parentSlug ? quiz.category.name : '',
       difficulty: quiz.difficulty,
       totalQuestions: quiz.questions.length,
     },
@@ -111,8 +209,9 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
     timeTaken,
     passed: percentage >= 60,
   })
+  if (!quiz.isPrivate) await awardVerifiedQuizExperience(req.user._id, quiz._id, attempt)
   await Quiz.updateOne({ _id: quiz._id }, { $inc: { attemptsCount: 1 } })
-  await syncAchievements(req.user._id, attempt, quiz)
+  if (!quiz.isPrivate) await syncAchievements(req.user._id, attempt, quiz)
   const result = await Attempt.findById(attempt._id)
     .populate({ path: 'quiz', populate: { path: 'category', select: 'name slug' } })
     .populate({ path: 'answers.question', select: 'text options correctAnswer explanation position' })
@@ -122,7 +221,7 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
 
 router.get('/', authenticate, asyncHandler(async (req, res) => {
   const attempts = await Attempt.find({ user: req.user._id })
-    .populate({ path: 'quiz', select: 'title category difficulty totalQuestions', populate: { path: 'category', select: 'name slug' } })
+    .populate({ path: 'quiz', select: 'title category difficulty totalQuestions', populate: { path: 'category', select: 'name slug parentSlug' } })
     .sort({ createdAt: -1 }).limit(100).lean()
   res.json(attempts)
 }))

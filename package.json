@@ -11,7 +11,7 @@
     "dev:client": "npm --workspace client run dev",
     "dev:server": "npm --workspace server run dev",
     "build": "npm --workspace client run build",
-    "test": "npm --workspace client test && node --test server/src/routes/admin.test.js server/src/seed.test.js",
+    "test": "npm --workspace client test && node --test server/src/routes/admin.test.js server/src/routes/adminImport.test.js server/src/routes/auth.test.js server/src/routes/quizzes.test.js server/src/routes/exams.test.js server/src/routes/attempts.test.js server/src/routes/learning.test.js server/src/routes/bookmarks.test.js server/src/routes/certificates.test.js server/src/seed.test.js server/src/gamification.test.js server/src/recommendations.test.js server/src/bulkQuestionImport.test.js server/src/weakAreas.test.js",
     "start": "npm --workspace server start"
   },
   "devDependencies": {

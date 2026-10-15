@@ -5,6 +5,12 @@ import Achievement from '../models/Achievement.js'
 import { authenticate } from '../middleware/auth.js'
 import asyncHandler from '../middleware/asyncHandler.js'
 import { achievements as achievementCatalog } from './attempts.js'
+import Quiz from '../models/Quiz.js'
+import { recommendQuizzes } from '../recommendations.js'
+import QuizReward from '../models/QuizReward.js'
+import { summarizeGamification } from '../gamification.js'
+import Category from '../models/Category.js'
+import { summarizeWeakAreas } from '../weakAreas.js'
 
 const router = Router()
 
@@ -59,6 +65,54 @@ router.get('/dashboard', authenticate, asyncHandler(async (req, res) => {
       progress: earnedMap.has(item.code) ? 100 : Math.min(100, Math.round((progressValues[item.code] / item.goal) * 100)),
     })),
   })
+}))
+
+router.get('/recommendations', authenticate, asyncHandler(async (req, res) => {
+  const [attempts, quizzes] = await Promise.all([
+    Attempt.find({ user: req.user._id })
+      .select('percentage quiz')
+      .sort({ createdAt: -1 })
+      .limit(30)
+      .populate({ path: 'quiz', select: 'category', populate: { path: 'category', select: 'name slug parentSlug rootSlug' } })
+      .lean(),
+    Quiz.find({ isPrivate: { $ne: true } }).select('title description difficulty totalQuestions timeLimit category featured')
+      .populate('category', 'name slug parentSlug rootSlug')
+      .sort({ featured: -1, title: 1 }).limit(300).lean(),
+  ])
+  res.json({ recommendations: recommendQuizzes(attempts, quizzes) })
+}))
+
+router.get('/weak-areas', authenticate, asyncHandler(async (req, res) => {
+  const attempts = await Attempt.find({ user: req.user._id })
+    .select('percentage quiz quizSnapshot answers')
+    .sort({ createdAt: -1 })
+    .limit(250)
+    .populate({ path: 'quiz', select: 'category', populate: { path: 'category', select: 'name slug parentSlug rootSlug' } })
+    .lean()
+  const categoryIds = [...new Set(attempts.flatMap(attempt => [
+    attempt.quiz?.category?._id,
+    ...(attempt.answers || []).map(answer => answer.questionSnapshot?.categoryId),
+  ]).filter(Boolean).map(String))]
+  const categories = await Category.find({ _id: { $in: categoryIds } }).select('name slug parentSlug rootSlug').lean()
+  const rootSlugs = [...new Set(categories.map(category => category.rootSlug || category.slug))]
+  const [rootCategories, quizzes] = await Promise.all([
+    Category.find({ slug: { $in: rootSlugs } }).select('name slug').lean(),
+    Quiz.find({ category: { $in: categoryIds }, isPrivate: { $ne: true } })
+      .select('title category featured attemptsCount')
+      .sort({ featured: -1, attemptsCount: -1, title: 1 })
+      .lean(),
+  ])
+  const areas = summarizeWeakAreas(attempts, [...categories, ...rootCategories], quizzes)
+  res.json({ areas, weakAreas: areas.filter(area => area.average < 70) })
+}))
+
+router.get('/gamification', authenticate, asyncHandler(async (req, res) => {
+  const yearAgo = new Date(Date.now() - 366 * 24 * 60 * 60 * 1000)
+  const [rewards, attempts] = await Promise.all([
+    QuizReward.find({ user: req.user._id }).select('xp').lean(),
+    Attempt.find({ user: req.user._id, createdAt: { $gte: yearAgo } }).select('createdAt quiz').sort({ createdAt: -1 }).lean(),
+  ])
+  res.json(summarizeGamification(rewards, attempts))
 }))
 
 export default router

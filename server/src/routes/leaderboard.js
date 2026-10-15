@@ -13,13 +13,15 @@ const publicName = name => {
 }
 
 router.get('/', optionalAuthenticate, asyncHandler(async (req, res) => {
-  const filter = {}
+  const filter = {
+    quiz: { $in: await Quiz.find({ isPrivate: { $ne: true } }).distinct('_id') },
+  }
   if (req.query.category) {
     const category = mongoose.isValidObjectId(req.query.category)
       ? await Category.findById(req.query.category).select('_id')
       : await Category.findOne({ slug: req.query.category }).select('_id')
     if (!category) return res.json([])
-    const quizzes = await Quiz.find({ category: category._id }).select('_id')
+    const quizzes = await Quiz.find({ category: category._id, isPrivate: { $ne: true } }).select('_id')
     filter.quiz = { $in: quizzes.map(quiz => quiz._id) }
   }
   const attempts = await Attempt.find(filter)

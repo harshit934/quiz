@@ -14,7 +14,17 @@ export function quizReviewRows(attempt) {
   return (attempt.answers || []).map((row, i) => {
     const question = row.questionSnapshot?.text ? row.questionSnapshot : row.question
     if (!question?.text || !Array.isArray(question.options) || !Number.isInteger(question.correctAnswer)) return null
-    return { id: `${attempt.quiz?._id || attempt.quiz || attempt.quizSnapshot?.title}-${row.question?.id || row.question?._id || (typeof row.question === 'string' ? row.question : question.text) || i}`, title: attempt.quiz?.title || attempt.quizSnapshot?.title || 'Quiz', question, selectedOption: row.selectedOption || '', resolved: row.selectedOption === question.options[question.correctAnswer] }
+    const questionId = row.question?.id || row.question?._id || (row.question ? String(row.question) : question.text || i)
+    return {
+      id: `${attempt.quiz?._id || attempt.quiz || attempt.quizSnapshot?.title}-${questionId}`,
+      title: attempt.quiz?.title || attempt.quizSnapshot?.title || 'Quiz',
+      subject: attempt.quiz?.category?.name || attempt.quizSnapshot?.category || '',
+      topic: attempt.quizSnapshot?.topic || (attempt.quiz?.category?.parentSlug ? attempt.quiz.category.name : ''),
+      difficulty: attempt.quiz?.difficulty || attempt.quizSnapshot?.difficulty || '',
+      question,
+      selectedOption: row.selectedOption || '',
+      resolved: row.selectedOption === question.options[question.correctAnswer],
+    }
   }).filter(Boolean)
 }
 export function applyLearningOperation(state, op) {
@@ -36,13 +46,17 @@ export function applyLearningOperation(state, op) {
   if (op.type === 'quiz') {
     addActivity(next, data.day, `quiz-${data.attemptId}`)
     for (const row of data.rows) {
-      if (!row.resolved) { delete next.quizMistakes[row.id]; next.quizMistakes[row.id] = row }
+      if (!row.resolved) {
+        const previous = next.quizMistakes[row.id]
+        next.quizMistakes[row.id] = { ...row, mistakeCount: (previous?.mistakeCount || 0) + 1 }
+      }
       else if (next.quizMistakes[row.id]) next.quizMistakes[row.id].resolved = true
     }
   }
   if (op.type === 'review') {
     if (next.quizMistakes[data.key]) next.quizMistakes[data.key].resolved = true
   }
+  if (op.type === 'remove-mistake') delete next.quizMistakes[data.key]
   if (op.type === 'import') {
     for (const [key, value] of Object.entries(data.progress || {})) if (!['__proto__', 'constructor', 'prototype'].includes(key) && !next.progress[key]) next.progress[key] = value
     for (const item of data.mistakes || []) if (!next.mistakes.some(row => row.challenge.id === item.challenge.id)) next.mistakes.push(item)

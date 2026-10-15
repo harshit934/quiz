@@ -21,6 +21,7 @@ function blankForm() {
   return {
     title: '', description: '', instructions: '', category: '', topics: [],
     difficulty: 'Mixed', questionCount: 10, duration: 60,
+    negativeMarking: 0, reviewPolicy: 'after-end', shuffleQuestions: false, shuffleOptions: true,
     startTime: toLocalInput(start), endTime: toLocalInput(end),
     passingPercentage: 60, maxAttempts: 1, selectionMethod: 'manual', questionIds: [],
     status: 'draft', requiresAccessCode: false,
@@ -124,6 +125,10 @@ export default function AdminExamsPage({ route = [], navigate }) {
           difficulty: existing.difficulty,
           questionCount: existing.questionCount,
           duration: existing.duration,
+          negativeMarking: existing.negativeMarking ?? 0,
+          reviewPolicy: existing.reviewPolicy || 'after-end',
+          shuffleQuestions: existing.shuffleQuestions ?? false,
+          shuffleOptions: existing.shuffleOptions ?? true,
           startTime: toLocalInput(existing.startTime),
           endTime: toLocalInput(existing.endTime),
           passingPercentage: existing.passingPercentage,
@@ -181,6 +186,7 @@ export default function AdminExamsPage({ route = [], navigate }) {
         ...form,
         questionCount: Number(form.questionCount),
         duration: Number(form.duration),
+        negativeMarking: Number(form.negativeMarking),
         passingPercentage: Number(form.passingPercentage),
         maxAttempts: Number(form.maxAttempts),
         startTime: fromLocalInput(form.startTime),
@@ -291,10 +297,14 @@ export default function AdminExamsPage({ route = [], navigate }) {
               <label className="field-label">Question selection<select value={form.selectionMethod} onChange={event => updateForm('selectionMethod', event.target.value)}><option value="manual">Select from question bank</option><option value="random">Random from eligible question bank</option></select></label>
               <label className="field-label">Number of questions<input type="number" min="1" max="200" required value={form.questionCount} onChange={event => updateForm('questionCount', event.target.value)} /></label>
               <label className="field-label">Duration (minutes)<input type="number" min="1" max="600" required value={form.duration} onChange={event => updateForm('duration', event.target.value)} /></label>
+              <label className="field-label">Negative marking per wrong answer<input type="number" min="0" max="1" step="0.05" value={form.negativeMarking} onChange={event => updateForm('negativeMarking', event.target.value)} /><small>Deduct up to 1 point; unanswered questions are not penalized.</small></label>
+              <label className="field-label">Answer review policy<select value={form.reviewPolicy} onChange={event => updateForm('reviewPolicy', event.target.value)}><option value="after-end">Reveal after the exam closes</option><option value="after-submit">Reveal after each submission</option></select></label>
               <label className="field-label">Start date and time<input type="datetime-local" required value={form.startTime} onChange={event => updateForm('startTime', event.target.value)} /></label>
               <label className="field-label">End date and time<input type="datetime-local" required value={form.endTime} onChange={event => updateForm('endTime', event.target.value)} /></label>
               <label className="field-label">Passing percentage<input type="number" min="0" max="100" required value={form.passingPercentage} onChange={event => updateForm('passingPercentage', event.target.value)} /></label>
               <label className="field-label">Maximum attempts<input type="number" min="1" max="20" required value={form.maxAttempts} onChange={event => updateForm('maxAttempts', event.target.value)} /></label>
+              <label className="exam-field-wide"><input type="checkbox" checked={form.shuffleQuestions} onChange={event => updateForm('shuffleQuestions', event.target.checked)} /> Shuffle question order for each attempt</label>
+              <label className="exam-field-wide"><input type="checkbox" checked={form.shuffleOptions} onChange={event => updateForm('shuffleOptions', event.target.checked)} /> Shuffle answer options for each attempt</label>
               {examId
                 ? <p className="muted">Change publication status from the exam management controls after saving.</p>
                 : <label className="field-label">Initial status<select value={form.status} onChange={event => updateForm('status', event.target.value)}><option value="draft">Draft</option><option value="scheduled">Scheduled</option><option value="published">Published</option></select></label>}

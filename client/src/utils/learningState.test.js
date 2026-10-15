@@ -22,6 +22,16 @@ test('goals, bookmarks, quiz activities and resolved reviews survive replay with
   assert.deepEqual(state.bookmarks, {})
   assert.equal(emptyLearning().goal, 3)
 })
+test('repeated incorrect attempts increase one notebook entry and removal clears it', () => {
+  const attempt = { _id: 'a', quiz: { _id: 'q' }, answers: [{ question: 'one', questionSnapshot: { text: '2 + 2?', options: ['3', '4'], correctAnswer: 1 }, selectedOption: '3' }] }
+  const row = quizReviewRows(attempt)[0]
+  let state = applyLearningOperation(emptyLearning(), { id: 'quiz-a', type: 'quiz', data: { attemptId: 'a', day: '2026-10-09', rows: [row] } })
+  state = applyLearningOperation(state, { id: 'quiz-b', type: 'quiz', data: { attemptId: 'b', day: '2026-10-10', rows: [row] } })
+  assert.equal(Object.keys(state.quizMistakes).length, 1)
+  assert.equal(state.quizMistakes[row.id].mistakeCount, 2)
+  state = applyLearningOperation(state, { id: 'remove', type: 'remove-mistake', data: { key: row.id } })
+  assert.equal(Object.keys(state.quizMistakes).length, 0)
+})
 test('streak spans month boundaries, survives until the next day, and resets after a gap', () => {
   const days = { '2026-09-30': ['a'], '2026-10-01': ['b'], '2026-10-02': ['c'] }
   assert.equal(streak(days, '2026-10-02'), 3)

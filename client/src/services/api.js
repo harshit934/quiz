@@ -59,3 +59,27 @@ export function saveLocalAttempt(attempt) {
   attempts.unshift(attempt)
   localStorage.setItem('quizly-attempts', JSON.stringify(attempts.slice(0, 100)))
 }
+
+export async function downloadCertificate(certificateId) {
+  const token = getToken()
+  if (!token || token === 'demo-session') throw new Error('Sign in to download a certificate.')
+  const response = await fetch(`${API_BASE}/api/certificates/${encodeURIComponent(certificateId)}/pdf`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.message || 'The certificate PDF could not be downloaded.')
+  }
+  const objectUrl = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = `quizly-certificate-${certificateId}.pdf`
+  document.body.append(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+}
+
+export function certificateVerificationUrl(certificateId) {
+  return `${API_BASE}/api/certificates/verify/${encodeURIComponent(certificateId)}`
+}

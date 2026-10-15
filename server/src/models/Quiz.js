@@ -11,6 +11,7 @@ const quizSchema = new mongoose.Schema({
   attemptsCount: { type: Number, default: 0 },
   featured: { type: Boolean, default: false },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  isPrivate: { type: Boolean, default: false, index: true },
 }, { timestamps: true })
 
 export default mongoose.model('Quiz', quizSchema)
